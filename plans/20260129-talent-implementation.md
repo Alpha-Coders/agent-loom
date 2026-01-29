@@ -50,12 +50,12 @@ Filename: plans/20260129-talent-implementation.md
 
 ### Phase 2: Tauri Shell
 
-11. [ ] Initialize Tauri project with commands (`src-tauri/`)
+11. [x] Initialize Tauri project with commands (`src-tauri/`)
 
 ### Phase 3: Frontend (Svelte)
 
-12. [ ] Initialize Svelte frontend with skill list UI (`src/`, `package.json`)
-13. [ ] Run and verify complete application
+12. [x] Initialize Svelte frontend with skill list UI (`src/`, `package.json`)
+13. [x] Run and verify complete application
 
 ### Phase 4-6: Future (Editor, Import/Export, Polish)
 
@@ -66,7 +66,7 @@ Filename: plans/20260129-talent-implementation.md
 ## Implementation State
 
 - State: in-progress
-- Current step: 11 - Initialize Tauri project
+- Current step: 14 - Add CodeMirror editor (Phase 4)
 - Last updated: 2026-01-29
 - Checkpoints:
   - 2026-01-29 not-started Initial plan created
@@ -74,6 +74,7 @@ Filename: plans/20260129-talent-implementation.md
   - 2026-01-29 in-progress Steps 4-6 completed (skill model, target model, validator). All 35 tests passing.
   - 2026-01-29 in-progress Steps 7-9 completed (syncer, watcher, manager). All 56 tests passing.
   - 2026-01-29 in-progress Step 10 completed (CLI implementation). All 56 tests passing. CLI commands: list, sync, doctor, targets, create, validate.
+  - 2026-01-29 in-progress Steps 11-13 completed (Tauri backend, Svelte frontend, app verification). MVP complete. All 56 tests passing.
 
 ## Status Updates
 
@@ -82,6 +83,7 @@ Filename: plans/20260129-talent-implementation.md
 - 2026-01-29 in-progress Completed batch 2: Skill model with frontmatter parsing (YAML between --- delimiters), target model with auto-detection for 6 CLIs (Claude Code, Codex, Gemini, Cursor, Amp, Goose), validation engine with kebab-case name enforcement. All 35 tests passing.
 - 2026-01-29 in-progress Completed batch 3: Symlink syncer with create/remove/unchanged tracking, file watcher with debounced events, skill manager facade integrating all components. All 56 tests passing.
 - 2026-01-29 in-progress Completed batch 4: CLI implementation with clap 4 - subcommands for list, sync, doctor, targets, create, validate. JSON output support. All 56 tests passing.
+- 2026-01-29 in-progress Completed batch 5: Tauri v2 backend with 9 commands (get_skills, get_targets, sync_all, create_skill, validate_skill, validate_all, refresh_skills, delete_skill, get_stats). Svelte 5 frontend with responsive skill list and target list UI. App runs successfully. All 56 tests passing.
 
 ## Dependencies
 
