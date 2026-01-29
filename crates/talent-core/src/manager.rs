@@ -241,6 +241,25 @@ impl SkillManager {
             .filter(|s| s.validation_status == ValidationStatus::Invalid)
     }
 
+    /// Get the raw content of a skill's SKILL.md file
+    pub fn get_skill_content(&self, name: &str) -> Result<String> {
+        let skill = self
+            .get_skill(name)
+            .ok_or_else(|| Error::SkillNotFound(self.config.skills_dir.join(name)))?;
+
+        skill.raw_content()
+    }
+
+    /// Save content to a skill's SKILL.md file
+    pub fn save_skill_content(&mut self, name: &str, content: &str) -> Result<()> {
+        let skill_path = self.config.skills_dir.join(name);
+        let skill = self
+            .get_skill_mut(name)
+            .ok_or_else(|| Error::SkillNotFound(skill_path))?;
+
+        skill.save_content(content)
+    }
+
     /// Get summary statistics
     pub fn stats(&self) -> ManagerStats {
         ManagerStats {

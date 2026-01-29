@@ -176,6 +176,29 @@ description: {}
     pub fn is_valid(&self) -> bool {
         self.validation_status == ValidationStatus::Valid
     }
+
+    /// Get the raw content of the SKILL.md file
+    pub fn raw_content(&self) -> Result<String> {
+        let skill_file = self.path.join(SKILL_FILE_NAME);
+        fs::read_to_string(&skill_file).map_err(|e| Error::io(&skill_file, e))
+    }
+
+    /// Save content to the SKILL.md file and reload the skill
+    pub fn save_content(&mut self, content: &str) -> Result<()> {
+        let skill_file = self.path.join(SKILL_FILE_NAME);
+        fs::write(&skill_file, content).map_err(|e| Error::io(&skill_file, e))?;
+
+        // Re-parse the frontmatter to update metadata
+        let (meta, parsed_content) = Self::parse_frontmatter(content, &skill_file)?;
+        self.meta = meta;
+        self.content = parsed_content;
+
+        // Reset validation status since content changed
+        self.validation_status = ValidationStatus::Unknown;
+        self.validation_errors.clear();
+
+        Ok(())
+    }
 }
 
 /// Discover all skills in a directory
@@ -335,5 +358,46 @@ description: No closing delimiter
     fn discover_handles_nonexistent_directory() {
         let skills = discover_skills(Path::new("/nonexistent/path")).unwrap();
         assert!(skills.is_empty());
+    }
+
+    #[test]
+    fn raw_content_returns_full_file() {
+        let temp = TempDir::new().unwrap();
+        let skills_dir = temp.path();
+
+        let skill = Skill::create(skills_dir, "content-skill", "A skill").unwrap();
+        let content = skill.raw_content().unwrap();
+
+        assert!(content.contains("---"));
+        assert!(content.contains("name: content-skill"));
+        assert!(content.contains("description: A skill"));
+    }
+
+    #[test]
+    fn save_content_updates_skill() {
+        let temp = TempDir::new().unwrap();
+        let skills_dir = temp.path();
+
+        let mut skill = Skill::create(skills_dir, "editable-skill", "Original").unwrap();
+        assert_eq!(skill.description(), "Original");
+
+        let new_content = r#"---
+name: editable-skill
+description: Updated description
+tags:
+  - new-tag
+---
+
+# New Content
+
+This is the new content.
+"#;
+
+        skill.save_content(new_content).unwrap();
+
+        assert_eq!(skill.description(), "Updated description");
+        assert_eq!(skill.meta.tags, vec!["new-tag"]);
+        assert!(skill.content.contains("This is the new content"));
+        assert_eq!(skill.validation_status, ValidationStatus::Unknown);
     }
 }

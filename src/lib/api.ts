@@ -38,3 +38,11 @@ export async function deleteSkill(name: string): Promise<void> {
 export async function getStats(): Promise<StatsInfo> {
   return invoke<StatsInfo>('get_stats');
 }
+
+export async function getSkillContent(name: string): Promise<string> {
+  return invoke<string>('get_skill_content', { name });
+}
+
+export async function saveSkillContent(name: string, content: string): Promise<SkillInfo> {
+  return invoke<SkillInfo>('save_skill_content', { name, content });
+}
