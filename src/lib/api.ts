@@ -1,0 +1,40 @@
+// API wrapper for Tauri commands
+
+import { invoke } from '@tauri-apps/api/core';
+import type { SkillInfo, TargetInfo, SyncResult, StatsInfo } from './types';
+
+export async function getSkills(): Promise<SkillInfo[]> {
+  return invoke<SkillInfo[]>('get_skills');
+}
+
+export async function getTargets(): Promise<TargetInfo[]> {
+  return invoke<TargetInfo[]>('get_targets');
+}
+
+export async function syncAll(): Promise<SyncResult[]> {
+  return invoke<SyncResult[]>('sync_all');
+}
+
+export async function createSkill(name: string, description: string): Promise<SkillInfo> {
+  return invoke<SkillInfo>('create_skill', { name, description });
+}
+
+export async function validateSkill(name: string): Promise<SkillInfo> {
+  return invoke<SkillInfo>('validate_skill', { name });
+}
+
+export async function validateAll(): Promise<SkillInfo[]> {
+  return invoke<SkillInfo[]>('validate_all');
+}
+
+export async function refreshSkills(): Promise<SkillInfo[]> {
+  return invoke<SkillInfo[]>('refresh_skills');
+}
+
+export async function deleteSkill(name: string): Promise<void> {
+  return invoke<void>('delete_skill', { name });
+}
+
+export async function getStats(): Promise<StatsInfo> {
+  return invoke<StatsInfo>('get_stats');
+}
