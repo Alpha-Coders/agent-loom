@@ -76,7 +76,7 @@ Filename: plans/20260129-talent-implementation.md
     - 15.4 [x] Update empty state in App.svelte with import option
     - 15.5 [x] Add Import button to toolbar
     - 15.6 [x] Write tests for importer module
-16. [ ] Polish UI and add system tray support
+16. [x] Polish UI and add system tray support
 
 ## Design: Skill Import Feature
 
@@ -275,8 +275,8 @@ pub struct ImportResult {
 
 ## Implementation State
 
-- State: in-progress
-- Current step: 16 - Polish UI and add system tray support
+- State: completed
+- Current step: All steps completed
 - Last updated: 2026-01-29
 - Checkpoints:
   - 2026-01-29 not-started Initial plan created
@@ -287,6 +287,7 @@ pub struct ImportResult {
   - 2026-01-29 in-progress Steps 11-13 completed (Tauri backend, Svelte frontend, app verification). MVP complete. All 56 tests passing.
   - 2026-01-29 in-progress Step 14 completed (CodeMirror 6 editor). All 58 tests passing. Skill editing with live preview.
   - 2026-01-29 in-progress Step 15 completed (skill import functionality). All 67 tests passing. Import dialog with conflict resolution and FileMerge integration.
+  - 2026-01-29 completed Step 16 completed (system tray support). All 67 tests passing. Tray icon with menu (Show, Sync All, Quit), close-to-tray behavior.
 
 ## Status Updates
 
@@ -298,6 +299,7 @@ pub struct ImportResult {
 - 2026-01-29 in-progress Completed batch 5: Tauri v2 backend with 9 commands (get_skills, get_targets, sync_all, create_skill, validate_skill, validate_all, refresh_skills, delete_skill, get_stats). Svelte 5 frontend with responsive skill list and target list UI. App runs successfully. All 56 tests passing.
 - 2026-01-29 in-progress Completed batch 6: CodeMirror 6 editor integration. Added get_skill_content and save_skill_content Tauri commands. Created SkillEditor Svelte component with markdown highlighting and dark theme. Split-panel UI with unsaved changes indicator. All 58 tests passing.
 - 2026-01-29 in-progress Completed batch 7: Skill import functionality. Added importer module with discovery engine, conflict detection, and FileMerge integration. Created ImportDialog component with checkbox selection and conflict resolution dropdowns. Updated App.svelte with Import button in toolbar and enhanced empty state. All 67 tests passing (9 new importer tests).
+- 2026-01-29 completed Completed batch 8: System tray support. Added tray-icon feature to Tauri, created tray.rs module with TrayIconBuilder, menu items (Show Talent, Sync All, Quit), close-to-tray behavior (window hides instead of closing). Left-click toggles window visibility. All 67 tests passing.
 
 ## Dependencies
 
