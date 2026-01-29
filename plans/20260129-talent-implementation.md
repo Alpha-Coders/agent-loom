@@ -59,14 +59,14 @@ Filename: plans/20260129-talent-implementation.md
 
 ### Phase 4-6: Future (Editor, Import/Export, Polish)
 
-14. [ ] Add CodeMirror 6 editor for skill editing
+14. [x] Add CodeMirror 6 editor for skill editing
 15. [ ] Implement skill import/export functionality
 16. [ ] Polish UI and add system tray support
 
 ## Implementation State
 
 - State: in-progress
-- Current step: 14 - Add CodeMirror editor (Phase 4)
+- Current step: 15 - Implement skill import/export functionality
 - Last updated: 2026-01-29
 - Checkpoints:
   - 2026-01-29 not-started Initial plan created
@@ -75,6 +75,7 @@ Filename: plans/20260129-talent-implementation.md
   - 2026-01-29 in-progress Steps 7-9 completed (syncer, watcher, manager). All 56 tests passing.
   - 2026-01-29 in-progress Step 10 completed (CLI implementation). All 56 tests passing. CLI commands: list, sync, doctor, targets, create, validate.
   - 2026-01-29 in-progress Steps 11-13 completed (Tauri backend, Svelte frontend, app verification). MVP complete. All 56 tests passing.
+  - 2026-01-29 in-progress Step 14 completed (CodeMirror 6 editor). All 58 tests passing. Skill editing with live preview.
 
 ## Status Updates
 
@@ -84,6 +85,7 @@ Filename: plans/20260129-talent-implementation.md
 - 2026-01-29 in-progress Completed batch 3: Symlink syncer with create/remove/unchanged tracking, file watcher with debounced events, skill manager facade integrating all components. All 56 tests passing.
 - 2026-01-29 in-progress Completed batch 4: CLI implementation with clap 4 - subcommands for list, sync, doctor, targets, create, validate. JSON output support. All 56 tests passing.
 - 2026-01-29 in-progress Completed batch 5: Tauri v2 backend with 9 commands (get_skills, get_targets, sync_all, create_skill, validate_skill, validate_all, refresh_skills, delete_skill, get_stats). Svelte 5 frontend with responsive skill list and target list UI. App runs successfully. All 56 tests passing.
+- 2026-01-29 in-progress Completed batch 6: CodeMirror 6 editor integration. Added get_skill_content and save_skill_content Tauri commands. Created SkillEditor Svelte component with markdown highlighting and dark theme. Split-panel UI with unsaved changes indicator. All 58 tests passing.
 
 ## Dependencies
 

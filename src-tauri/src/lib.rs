@@ -78,6 +78,8 @@ pub fn run() {
             commands::refresh_skills,
             commands::delete_skill,
             commands::get_stats,
+            commands::get_skill_content,
+            commands::save_skill_content,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

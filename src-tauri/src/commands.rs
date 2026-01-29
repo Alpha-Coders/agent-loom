@@ -87,3 +87,30 @@ pub fn get_stats(state: tauri::State<'_, AppState>) -> Result<StatsInfo, String>
         is_watching: stats.is_watching,
     })
 }
+
+/// Get the raw content of a skill's SKILL.md file
+#[tauri::command]
+pub fn get_skill_content(state: tauri::State<'_, AppState>, name: String) -> Result<String, String> {
+    let manager = state.manager.lock().map_err(|e| e.to_string())?;
+    manager
+        .get_skill_content(&name)
+        .map_err(|e| e.to_string())
+}
+
+/// Save content to a skill's SKILL.md file
+#[tauri::command]
+pub fn save_skill_content(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    content: String,
+) -> Result<SkillInfo, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    manager
+        .save_skill_content(&name, &content)
+        .map_err(|e| e.to_string())?;
+
+    let skill = manager
+        .get_skill(&name)
+        .ok_or_else(|| format!("Skill not found: {name}"))?;
+    Ok(SkillInfo::from(skill))
+}
