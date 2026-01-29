@@ -8,6 +8,12 @@
 
 pub mod config;
 pub mod error;
+pub mod skill;
+pub mod target;
+pub mod validator;
 
 pub use config::Config;
 pub use error::{Error, Result};
+pub use skill::{discover_skills, Skill, SkillMeta, ValidationStatus, SKILL_FILE_NAME};
+pub use target::{Target, TargetInfo, TargetKind};
+pub use validator::Validator;
