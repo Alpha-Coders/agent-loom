@@ -472,7 +472,7 @@
                 <div class="sync-errors-list">
                   {#each result.errors as err}
                     <div class="sync-error-item">
-                      {#if err.skill}<strong>{err.skill}:</strong> {/if}{err.message}
+                      {#if err.skill}<strong>{err.skill}</strong>: {/if}{err.message}
                     </div>
                   {/each}
                 </div>
