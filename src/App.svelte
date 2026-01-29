@@ -179,11 +179,14 @@
     }
   }
 
-  async function handleDeleteSkill(name: string, event: MouseEvent) {
+  async function handleDeleteSkill(skill: SkillInfo, event: MouseEvent) {
     event.stopPropagation();
 
+    // Use folder_name for file operations (may differ from frontmatter name)
+    const folderName = skill.folder_name;
+
     // Close editor FIRST if we're deleting the skill being edited
-    const wasEditing = editingSkill?.name === name;
+    const wasEditing = editingSkill?.folder_name === folderName;
     if (wasEditing) {
       editingSkill = null;
       editorContent = '';
@@ -192,11 +195,11 @@
 
     // Optimistically remove from list immediately for fast UI
     const previousSkills = skills;
-    skills = skills.filter(s => s.name !== name);
+    skills = skills.filter(s => s.folder_name !== folderName);
 
     try {
       error = null;
-      await deleteSkill(name);
+      await deleteSkill(folderName);
 
       // Refresh stats
       stats = await getStats();
@@ -219,22 +222,14 @@
 
     try {
       error = null;
-      const content = await getSkillContent(skill.name);
+      // Use folder_name for file operations
+      const content = await getSkillContent(skill.folder_name);
       editingSkill = skill;
       editorContent = content;
       originalContent = content;
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
-  }
-
-  // Extract the name from YAML frontmatter
-  function extractNameFromContent(content: string): string | null {
-    const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
-    if (!match) return null;
-    const frontmatter = match[1];
-    const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-    return nameMatch ? nameMatch[1].trim() : null;
   }
 
   async function handleSaveSkill() {
@@ -244,36 +239,26 @@
       isSaving = true;
       error = null;
 
-      const currentName = editingSkill.name;
-      const newName = extractNameFromContent(editorContent);
-      let skillName = currentName;
-      let didRename = false;
+      // Use folder_name for file operations
+      const currentFolderName = editingSkill.folder_name;
 
-      // Check if name changed in frontmatter
-      if (newName && newName !== currentName) {
-        // Rename the skill first (this also updates symlinks)
-        await renameSkill(currentName, newName);
-        skillName = newName;
-        didRename = true;
-      }
+      // Save content - backend automatically renames folder if frontmatter name changed
+      const savedSkill = await saveSkillContent(currentFolderName, editorContent);
 
-      // Save the content
-      await saveSkillContent(skillName, editorContent);
-
-      // Re-validate the skill
-      const validatedSkill = await validateSkill(skillName);
+      // Re-validate the skill (use folder_name from saved skill in case it was renamed)
+      const validatedSkill = await validateSkill(savedSkill.folder_name);
 
       // Update local state
       originalContent = editorContent;
       editingSkill = validatedSkill;
 
-      // Update skills list
-      if (didRename) {
-        // Replace old skill with new one
-        skills = skills.map(s => s.name === currentName ? validatedSkill : s);
+      // Update skills list (handle both rename and non-rename cases)
+      if (savedSkill.folder_name !== currentFolderName) {
+        // Skill was renamed - replace old entry with new one
+        skills = skills.map(s => s.folder_name === currentFolderName ? validatedSkill : s);
       } else {
         // Just update in place
-        skills = skills.map(s => s.name === skillName ? validatedSkill : s);
+        skills = skills.map(s => s.folder_name === savedSkill.folder_name ? validatedSkill : s);
       }
 
       stats = await getStats();
@@ -557,7 +542,7 @@
                 </div>
               {/if}
               <div class="skill-actions">
-                <button class="danger" onclick={(e) => handleDeleteSkill(skill.name, e)}>
+                <button class="danger" onclick={(e) => handleDeleteSkill(skill, e)}>
                   Delete
                 </button>
               </div>

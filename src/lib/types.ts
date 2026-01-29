@@ -2,6 +2,7 @@
 
 export interface SkillInfo {
   name: string;
+  folder_name: string;
   description: string;
   tags: string[];
   version: string | null;

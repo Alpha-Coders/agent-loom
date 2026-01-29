@@ -16,6 +16,7 @@ use talent_core::{ConflictResolution, SkillManager, ValidationStatus};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillInfo {
     pub name: String,
+    pub folder_name: String,
     pub description: String,
     pub tags: Vec<String>,
     pub version: Option<String>,
@@ -29,6 +30,7 @@ impl From<&talent_core::Skill> for SkillInfo {
     fn from(skill: &talent_core::Skill) -> Self {
         Self {
             name: skill.meta.name.clone(),
+            folder_name: skill.folder_name().to_string(),
             description: skill.meta.description.clone(),
             tags: skill.meta.tags.clone(),
             version: skill.meta.version.clone(),
