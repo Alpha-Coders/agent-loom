@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, getStats, getSkillContent, saveSkillContent, validateSkill } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
@@ -203,8 +204,22 @@
     return parts.join(' ') || 'No changes';
   }
 
-  onMount(() => {
+  // Event listener cleanup
+  let unlistenTraySync: UnlistenFn | null = null;
+
+  onMount(async () => {
     loadData();
+
+    // Listen for tray "Sync All" menu item
+    unlistenTraySync = await listen('tray-sync-all', () => {
+      handleSync();
+    });
+  });
+
+  onDestroy(() => {
+    if (unlistenTraySync) {
+      unlistenTraySync();
+    }
   });
 </script>
 

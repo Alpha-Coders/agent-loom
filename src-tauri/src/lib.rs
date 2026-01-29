@@ -4,10 +4,12 @@
 //! to the Svelte frontend.
 
 mod commands;
+mod tray;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use tauri::Manager;
 use talent_core::{ConflictResolution, SkillManager, TargetKind, ValidationStatus};
 
 /// Skill information for the frontend
@@ -130,6 +132,24 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
             manager: Mutex::new(manager),
+        })
+        .setup(|app| {
+            // Initialize system tray
+            tray::create_tray(app.handle())?;
+
+            // Set up close-to-tray behavior for main window
+            if let Some(window) = app.get_webview_window("main") {
+                let window_clone = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        // Prevent the window from closing, just hide it
+                        api.prevent_close();
+                        let _ = window_clone.hide();
+                    }
+                });
+            }
+
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_skills,
