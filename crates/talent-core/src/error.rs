@@ -66,6 +66,18 @@ pub enum Error {
     #[error("Could not access skills directory for '{name}': {path}")]
     TargetDirInaccessible { name: String, path: PathBuf },
 
+    /// Target-related operation error
+    #[error("Target error: {0}")]
+    TargetError(String),
+
+    /// Target already exists
+    #[error("Target already exists: {0}")]
+    TargetAlreadyExists(String),
+
+    /// Unknown target type
+    #[error("Unknown target type: {0}")]
+    UnknownTargetType(String),
+
     // === Sync Errors ===
     /// Failed to create symlink
     #[error("Failed to create symlink from {link_source} to {link_target}: {message}")]

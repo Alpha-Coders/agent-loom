@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { ask } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills } from './lib/api';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
 
@@ -25,8 +25,14 @@
   let isImporting = $state(false);
   let lastImportResult = $state<ImportResultInfo | null>(null);
 
-  // Active tab
-  let activeTab = $state<'skills' | 'targets'>('skills');
+  // Sidebar filter
+  let activeFilter = $state<'all' | 'valid' | 'invalid'>('all');
+
+  // Add target state
+  let showAddTargetForm = $state(false);
+  let availableTargetTypes = $state<[string, string][]>([]);
+  let selectedTargetType = $state('');
+  let customTargetPath = $state('');
 
   // Editor state
   let editingSkill = $state<SkillInfo | null>(null);
@@ -36,85 +42,38 @@
 
   let hasUnsavedChanges = $derived(editorContent !== originalContent);
 
-  // Resizable pane state
-  const MIN_MAIN_WIDTH = 320;
-  const MIN_EDITOR_WIDTH = 400;
-  const STORAGE_KEY_MAIN_WIDTH = 'talent-main-panel-width';
-
-  let mainPanelWidth = $state<number | null>(null);
-  let isResizing = $state(false);
-  let containerRef: HTMLDivElement | null = null;
-
-  function loadSavedWidth() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_MAIN_WIDTH);
-      if (saved) {
-        const width = parseInt(saved, 10);
-        if (!isNaN(width) && width >= MIN_MAIN_WIDTH) {
-          mainPanelWidth = width;
-        }
-      }
-    } catch {
-      // localStorage not available
+  // Filtered skills based on sidebar selection
+  let filteredSkills = $derived(() => {
+    switch (activeFilter) {
+      case 'valid':
+        return skills.filter(s => s.validation_status === 'valid');
+      case 'invalid':
+        return skills.filter(s => s.validation_status === 'invalid');
+      default:
+        return skills;
     }
-  }
+  });
 
-  function savePanelWidth(width: number) {
-    try {
-      localStorage.setItem(STORAGE_KEY_MAIN_WIDTH, width.toString());
-    } catch {
-      // localStorage not available
-    }
-  }
-
-  function handleResizeStart(e: MouseEvent) {
-    e.preventDefault();
-    isResizing = true;
-    document.addEventListener('mousemove', handleResizeMove);
-    document.addEventListener('mouseup', handleResizeEnd);
-  }
-
-  function handleResizeMove(e: MouseEvent) {
-    if (!isResizing || !containerRef) return;
-
-    const containerRect = containerRef.getBoundingClientRect();
-    const containerWidth = containerRect.width;
-    let newWidth = e.clientX - containerRect.left;
-
-    // Enforce minimum widths
-    newWidth = Math.max(MIN_MAIN_WIDTH, newWidth);
-    newWidth = Math.min(containerWidth - MIN_EDITOR_WIDTH - 8, newWidth); // 8px for handle
-
-    mainPanelWidth = newWidth;
-  }
-
-  function handleResizeEnd() {
-    isResizing = false;
-    document.removeEventListener('mousemove', handleResizeMove);
-    document.removeEventListener('mouseup', handleResizeEnd);
-
-    if (mainPanelWidth !== null) {
-      savePanelWidth(mainPanelWidth);
-    }
-  }
+  // Counts for sidebar
+  let validCount = $derived(skills.filter(s => s.validation_status === 'valid').length);
+  let invalidCount = $derived(skills.filter(s => s.validation_status === 'invalid').length);
+  let enabledTargetsCount = $derived(targets.filter(t => t.enabled).length);
 
   async function loadData() {
     try {
       isLoading = true;
       error = null;
 
-      // Load targets and stats in parallel, then validate skills
       const [targetsData, statsData] = await Promise.all([
         getTargets(),
         getStats()
       ]);
 
-      // Validate all skills on load to get proper status
       const skillsData = await validateAll();
 
       skills = skillsData;
       targets = targetsData;
-      stats = await getStats(); // Refresh stats after validation
+      stats = await getStats();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -127,13 +86,8 @@
       isSyncing = true;
       error = null;
 
-      // First validate all skills
       skills = await validateAll();
-
-      // Then sync
       lastSyncResults = await syncAll();
-
-      // Refresh data
       await loadData();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -145,7 +99,6 @@
   async function handleRefresh() {
     try {
       error = null;
-      // Refresh skills from disk, then validate them
       await refreshSkills();
       skills = await validateAll();
       stats = await getStats();
@@ -163,16 +116,10 @@
     try {
       error = null;
       const newSkill = await createSkill(name, description);
-
-      // Optimistically add to list
       skills = [...skills, newSkill];
-
-      // Reset form
       newSkillName = '';
       newSkillDescription = '';
       showNewSkillForm = false;
-
-      // Refresh stats
       stats = await getStats();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -182,36 +129,29 @@
   async function handleDeleteSkill(skill: SkillInfo, event: MouseEvent) {
     event.stopPropagation();
 
-    // Use folder_name for file operations (may differ from frontmatter name)
     const folderName = skill.folder_name;
-
-    // Close editor FIRST if we're deleting the skill being edited
     const wasEditing = editingSkill?.folder_name === folderName;
+
     if (wasEditing) {
       editingSkill = null;
       editorContent = '';
       originalContent = '';
     }
 
-    // Optimistically remove from list immediately for fast UI
     const previousSkills = skills;
     skills = skills.filter(s => s.folder_name !== folderName);
 
     try {
       error = null;
       await deleteSkill(folderName);
-
-      // Refresh stats
       stats = await getStats();
     } catch (e) {
-      // Restore on error
       skills = previousSkills;
       error = e instanceof Error ? e.message : String(e);
     }
   }
 
   async function handleEditSkill(skill: SkillInfo) {
-    // Warn if unsaved changes
     if (hasUnsavedChanges && editingSkill) {
       const confirmed = await ask('You have unsaved changes. Discard and open another skill?', {
         title: 'Unsaved Changes',
@@ -222,7 +162,6 @@
 
     try {
       error = null;
-      // Use folder_name for file operations
       const content = await getSkillContent(skill.folder_name);
       editingSkill = skill;
       editorContent = content;
@@ -239,32 +178,22 @@
       isSaving = true;
       error = null;
 
-      // Use folder_name for file operations
       const currentFolderName = editingSkill.folder_name;
-
-      // Save content - backend automatically renames folder if frontmatter name changed
       const savedSkill = await saveSkillContent(currentFolderName, editorContent);
-
-      // Re-validate the skill (use folder_name from saved skill in case it was renamed)
       const validatedSkill = await validateSkill(savedSkill.folder_name);
 
-      // Update local state
       originalContent = editorContent;
       editingSkill = validatedSkill;
 
-      // Update skills list (handle both rename and non-rename cases)
       if (savedSkill.folder_name !== currentFolderName) {
-        // Skill was renamed - replace old entry with new one
         skills = skills.map(s => s.folder_name === currentFolderName ? validatedSkill : s);
       } else {
-        // Just update in place
         skills = skills.map(s => s.folder_name === savedSkill.folder_name ? validatedSkill : s);
       }
 
       stats = await getStats();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
-      // On error, reload data to get back to a consistent state
       await loadData();
     } finally {
       isSaving = false;
@@ -288,14 +217,6 @@
     editorContent = content;
   }
 
-  function getStatusColor(status: string): string {
-    switch (status) {
-      case 'valid': return 'var(--color-success)';
-      case 'invalid': return 'var(--color-error)';
-      default: return 'var(--color-warning)';
-    }
-  }
-
   async function handleImport() {
     isImporting = true;
     error = null;
@@ -304,8 +225,6 @@
     try {
       const result = await importAllSkills();
       lastImportResult = result;
-
-      // Refresh skills list after import
       await loadData();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -314,123 +233,241 @@
     }
   }
 
-  function getSyncSummary(result: SyncResult): string {
-    const parts = [];
-    if (result.created.length > 0) parts.push(`＋${result.created.length}`);
-    if (result.removed.length > 0) parts.push(`−${result.removed.length}`);
-    if (result.unchanged.length > 0) parts.push(`✓${result.unchanged.length}`);
-    return parts.join(' ') || 'No changes';
+  // Target management
+  async function handleToggleTarget(targetId: string) {
+    try {
+      error = null;
+      await toggleTarget(targetId);
+      // Refresh targets to get updated state
+      targets = await getTargets();
+      stats = await getStats();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function handleShowAddTarget() {
+    try {
+      availableTargetTypes = await getAvailableTargetTypes();
+      if (availableTargetTypes.length > 0) {
+        selectedTargetType = availableTargetTypes[0][0];
+      }
+      customTargetPath = '';
+      showAddTargetForm = true;
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function handleAddTarget() {
+    if (!selectedTargetType || !customTargetPath.trim()) return;
+
+    try {
+      error = null;
+      await addCustomTarget(selectedTargetType, customTargetPath.trim());
+      targets = await getTargets();
+      stats = await getStats();
+      showAddTargetForm = false;
+      selectedTargetType = '';
+      customTargetPath = '';
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
   }
 
   // Event listener cleanup
   let unlistenTraySync: UnlistenFn | null = null;
 
+  // Prevent macOS beep on non-input keystrokes + keyboard shortcuts
+  function handleKeydown(event: KeyboardEvent) {
+    const target = event.composedPath()[0];
+    const isInput = target instanceof HTMLInputElement ||
+                    target instanceof HTMLTextAreaElement ||
+                    (target instanceof HTMLElement && target.closest('.cm-editor'));
+
+    // Keyboard shortcuts
+    if (event.metaKey || event.ctrlKey) {
+      switch (event.key) {
+        case 's':
+          event.preventDefault();
+          if (editingSkill && hasUnsavedChanges) {
+            handleSaveSkill();
+          }
+          return;
+        case 'n':
+          event.preventDefault();
+          showNewSkillForm = true;
+          return;
+      }
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (showNewSkillForm) {
+        showNewSkillForm = false;
+      } else if (editingSkill) {
+        handleCloseEditor();
+      }
+      return;
+    }
+
+    // Allow default behavior in input fields
+    if (isInput) return;
+
+    // Prevent beep for non-input keystrokes
+    event.preventDefault();
+  }
+
   onMount(async () => {
-    loadSavedWidth();
     loadData();
 
-    // Listen for tray "Sync All" menu item
     unlistenTraySync = await listen('tray-sync-all', () => {
       handleSync();
     });
+
+    document.addEventListener('keydown', handleKeydown);
   });
 
   onDestroy(() => {
     if (unlistenTraySync) {
       unlistenTraySync();
     }
+    document.removeEventListener('keydown', handleKeydown);
   });
 </script>
 
-<div
-  class="app-container"
-  class:editor-open={editingSkill !== null}
-  class:is-resizing={isResizing}
-  bind:this={containerRef}
->
-  <main style={editingSkill && mainPanelWidth ? `width: ${mainPanelWidth}px; flex: none;` : ''}>
-    <header>
+<div class="app-container" class:editor-open={editingSkill !== null}>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
       <h1>Talent</h1>
-      <p class="subtitle">Agent Skills Manager</p>
-    </header>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <button
+          class="nav-item"
+          class:active={activeFilter === 'all'}
+          onclick={() => activeFilter = 'all'}
+        >
+          <span class="nav-icon">◈</span>
+          <span class="nav-label">All Skills</span>
+          <span class="nav-count">{skills.length}</span>
+        </button>
+        <button
+          class="nav-item"
+          class:active={activeFilter === 'valid'}
+          onclick={() => activeFilter = 'valid'}
+        >
+          <span class="nav-icon">●</span>
+          <span class="nav-label">Valid</span>
+          <span class="nav-count">{validCount}</span>
+        </button>
+        <button
+          class="nav-item"
+          class:active={activeFilter === 'invalid'}
+          onclick={() => activeFilter = 'invalid'}
+        >
+          <span class="nav-icon">○</span>
+          <span class="nav-label">Invalid</span>
+          <span class="nav-count">{invalidCount}</span>
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-header">
+          <span class="nav-section-title">Targets</span>
+          <button class="nav-section-action" onclick={handleShowAddTarget} title="Add target">+</button>
+        </div>
+        {#if showAddTargetForm}
+          <div class="add-target-form">
+            <select bind:value={selectedTargetType}>
+              {#each availableTargetTypes as [id, name]}
+                <option value={id}>{name}</option>
+              {/each}
+            </select>
+            <input
+              type="text"
+              placeholder="Skills path..."
+              bind:value={customTargetPath}
+            />
+            <div class="form-actions">
+              <button onclick={() => showAddTargetForm = false}>Cancel</button>
+              <button class="primary" onclick={handleAddTarget} disabled={!selectedTargetType || !customTargetPath.trim()}>
+                Add
+              </button>
+            </div>
+          </div>
+        {/if}
+        {#each targets as target}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="nav-item target-item"
+            class:disabled={!target.enabled}
+            onclick={() => handleToggleTarget(target.id)}
+            title={target.enabled ? 'Click to disable' : 'Click to enable'}
+          >
+            <span class="nav-icon">{target.enabled ? '◉' : '○'}</span>
+            <span class="nav-label">{target.name}</span>
+            {#if target.exists}
+              <span class="target-ready">✓</span>
+            {/if}
+          </div>
+        {/each}
+        {#if targets.length === 0}
+          <div class="nav-empty">No targets detected</div>
+        {/if}
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="sidebar-action" onclick={handleSync} disabled={isSyncing}>
+        {isSyncing ? 'Syncing...' : 'Sync All'}
+      </button>
+      <div class="sidebar-actions-row">
+        <button class="sidebar-action-small" onclick={handleRefresh} disabled={isLoading}>↻</button>
+        <button class="sidebar-action-small" onclick={handleImport} disabled={isImporting}>↓</button>
+        <button class="sidebar-action-small" onclick={() => showNewSkillForm = !showNewSkillForm}>+</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Skill List -->
+  <div class="list-panel">
+    <div class="list-header">
+      <span class="list-title">
+        {activeFilter === 'all' ? 'All Skills' : activeFilter === 'valid' ? 'Valid Skills' : 'Invalid Skills'}
+      </span>
+      <span class="list-count">{filteredSkills().length}</span>
+    </div>
 
     {#if error}
       <div class="error-banner">
         <span>{error}</span>
-        <button onclick={() => error = null}>Dismiss</button>
+        <button onclick={() => error = null}>×</button>
       </div>
     {/if}
-
-    {#if stats}
-      <div class="stats-bar">
-        <div class="stat">
-          <span class="stat-value">{stats.total_skills}</span>
-          <span class="stat-label">Skills</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value">{stats.valid_skills}</span>
-          <span class="stat-label">Valid</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value">{stats.enabled_targets}</span>
-          <span class="stat-label">Targets</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value">{stats.is_watching ? 'On' : 'Off'}</span>
-          <span class="stat-label">Auto-sync</span>
-        </div>
-      </div>
-    {/if}
-
-    <div class="toolbar">
-      <div class="tabs">
-        <button
-          class="tab"
-          class:active={activeTab === 'skills'}
-          onclick={() => activeTab = 'skills'}
-        >
-          Skills ({skills.length})
-        </button>
-        <button
-          class="tab"
-          class:active={activeTab === 'targets'}
-          onclick={() => activeTab = 'targets'}
-        >
-          Targets ({targets.length})
-        </button>
-      </div>
-      <div class="toolbar-divider"></div>
-      <div class="actions">
-        <button class="ghost" onclick={handleRefresh} disabled={isLoading}>
-          Refresh
-        </button>
-        <button onclick={handleSync} disabled={isSyncing || isLoading} class="primary">
-          {isSyncing ? 'Syncing...' : 'Sync All'}
-        </button>
-        <button class="ghost" onclick={handleImport} disabled={isImporting}>
-          {isImporting ? 'Importing...' : 'Import'}
-        </button>
-        <button class="ghost" onclick={() => showNewSkillForm = !showNewSkillForm}>
-          {showNewSkillForm ? 'Cancel' : 'New'}
-        </button>
-      </div>
-    </div>
 
     {#if showNewSkillForm}
       <div class="new-skill-form">
         <input
           type="text"
-          placeholder="skill-name (kebab-case)"
+          placeholder="skill-name"
           bind:value={newSkillName}
+          autofocus
         />
         <input
           type="text"
           placeholder="Description"
           bind:value={newSkillDescription}
         />
-        <button onclick={handleCreateSkill} class="primary" disabled={!newSkillName.trim() || !newSkillDescription.trim()}>
-          Create
-        </button>
+        <div class="form-actions">
+          <button onclick={() => showNewSkillForm = false}>Cancel</button>
+          <button class="primary" onclick={handleCreateSkill} disabled={!newSkillName.trim() || !newSkillDescription.trim()}>
+            Create
+          </button>
+        </div>
       </div>
     {/if}
 
@@ -438,239 +475,106 @@
       {@const totalCreated = lastSyncResults.reduce((sum, r) => sum + r.created.length, 0)}
       {@const totalRemoved = lastSyncResults.reduce((sum, r) => sum + r.removed.length, 0)}
       {@const totalErrors = lastSyncResults.reduce((sum, r) => sum + r.errors.length, 0)}
-      {@const hasErrors = totalErrors > 0}
-      <div class="sync-results" class:has-errors={hasErrors}>
-        <div class="sync-results-header">
-          <div class="sync-results-title">
-            <span class="sync-icon">{hasErrors ? '⚠' : '✓'}</span>
-            <h3>Sync {hasErrors ? 'Completed with Errors' : 'Complete'}</h3>
-          </div>
-          <div class="sync-results-summary">
-            {#if totalCreated > 0}
-              <span class="sync-stat created">+{totalCreated} added</span>
-            {/if}
-            {#if totalRemoved > 0}
-              <span class="sync-stat removed">-{totalRemoved} removed</span>
-            {/if}
-            {#if totalErrors > 0}
-              <span class="sync-stat errors">✕ {totalErrors} errors</span>
-            {/if}
-            {#if totalCreated === 0 && totalRemoved === 0 && totalErrors === 0}
-              <span class="sync-stat unchanged">All up to date</span>
-            {/if}
-          </div>
-          <button class="sync-dismiss" onclick={() => lastSyncResults = []}>×</button>
-        </div>
-        <div class="sync-targets">
-          {#each lastSyncResults as result}
-            <div class="sync-target" class:has-errors={result.errors.length > 0}>
-              <div class="sync-target-header">
-                <span class="sync-target-name">{result.target_name}</span>
-                <div class="sync-target-stats">
-                  {#if result.created.length > 0}
-                    <span class="stat-badge created">+{result.created.length}</span>
-                  {/if}
-                  {#if result.removed.length > 0}
-                    <span class="stat-badge removed">-{result.removed.length}</span>
-                  {/if}
-                  {#if result.unchanged.length > 0}
-                    <span class="stat-badge unchanged">✓{result.unchanged.length}</span>
-                  {/if}
-                  {#if result.errors.length > 0}
-                    <span class="stat-badge errors">✕{result.errors.length}</span>
-                  {/if}
-                </div>
-              </div>
-              {#if result.errors.length > 0}
-                <div class="sync-errors-list">
-                  {#each result.errors as err}
-                    <div class="sync-error-item">
-                      {#if err.skill}<strong>{err.skill}</strong>: {/if}{err.message}
-                    </div>
-                  {/each}
-                </div>
-              {/if}
-            </div>
-          {/each}
-        </div>
+      <div class="sync-banner" class:has-errors={totalErrors > 0}>
+        <span>
+          {#if totalErrors > 0}⚠{:else}✓{/if}
+          Synced: +{totalCreated} -{totalRemoved}
+          {#if totalErrors > 0}({totalErrors} errors){/if}
+        </span>
+        <button onclick={() => lastSyncResults = []}>×</button>
       </div>
     {/if}
 
     {#if lastImportResult}
-      {@const hasErrors = lastImportResult.errors.length > 0}
-      {@const totalImported = lastImportResult.imported.length}
-      <div class="sync-results" class:has-errors={hasErrors}>
-        <div class="sync-results-header">
-          <div class="sync-results-title">
-            <span class="sync-icon">{hasErrors ? '⚠' : '✓'}</span>
-            <h3>Import {hasErrors ? 'Completed with Errors' : 'Complete'}</h3>
-          </div>
-          <div class="sync-results-summary">
-            {#if totalImported > 0}
-              <span class="sync-stat created">+{totalImported} imported</span>
-            {/if}
-            {#if lastImportResult.errors.length > 0}
-              <span class="sync-stat errors">✕ {lastImportResult.errors.length} errors</span>
-            {/if}
-            {#if totalImported === 0 && lastImportResult.errors.length === 0}
-              <span class="sync-stat unchanged">No skills to import</span>
-            {/if}
-          </div>
-          <button class="sync-dismiss" onclick={() => lastImportResult = null}>×</button>
+      <div class="sync-banner" class:has-errors={lastImportResult.errors.length > 0}>
+        <span>
+          {#if lastImportResult.errors.length > 0}⚠{:else}✓{/if}
+          Imported: {lastImportResult.imported.length} skills
+        </span>
+        <button onclick={() => lastImportResult = null}>×</button>
+      </div>
+    {/if}
+
+    <div class="skill-list">
+      {#if isLoading}
+        <div class="loading">Loading...</div>
+      {:else if filteredSkills().length === 0}
+        <div class="empty-state">
+          <p>No skills found</p>
+          {#if activeFilter !== 'all'}
+            <button onclick={() => activeFilter = 'all'}>Show all</button>
+          {:else}
+            <button onclick={() => showNewSkillForm = true}>Create one</button>
+          {/if}
         </div>
-        {#if lastImportResult.errors.length > 0}
-          <div class="sync-targets">
-            <div class="sync-target has-errors">
-              <div class="sync-errors-list">
-                {#each lastImportResult.errors as [skillName, errorMsg]}
-                  <div class="sync-error-item">
-                    <strong>{skillName}</strong>: {errorMsg}
-                  </div>
-                {/each}
-              </div>
+      {:else}
+        {#each filteredSkills() as skill}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="skill-item"
+            class:selected={editingSkill?.folder_name === skill.folder_name}
+            onclick={() => handleEditSkill(skill)}
+          >
+            <div class="skill-status">
+              <span class="status-dot" class:valid={skill.validation_status === 'valid'} class:invalid={skill.validation_status === 'invalid'}></span>
             </div>
+            <div class="skill-info">
+              <div class="skill-name">{skill.name}</div>
+              <div class="skill-description">{skill.description}</div>
+            </div>
+            <button class="skill-delete" onclick={(e) => handleDeleteSkill(skill, e)}>×</button>
           </div>
-        {/if}
-      </div>
-    {/if}
+        {/each}
+      {/if}
+    </div>
+  </div>
 
-    {#if isLoading}
-      <div class="loading">Loading...</div>
-    {:else if activeTab === 'skills'}
-      <div class="skill-list">
-        {#if skills.length === 0}
-          <div class="empty-state">
-            <p>No skills found</p>
-            <div class="empty-actions">
-              <button class="primary" onclick={() => showNewSkillForm = true}>
-                + Create New Skill
-              </button>
-              <button onclick={handleImport} disabled={isImporting}>
-                {isImporting ? 'Importing...' : 'Import Existing'}
-              </button>
-            </div>
-            <p class="hint">or scan Codex, Claude Code, Gemini, Cursor, Amp, Goose...</p>
-          </div>
-        {:else}
-          {#each skills as skill}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-              class="skill-card"
-              class:selected={editingSkill?.name === skill.name}
-              onclick={() => handleEditSkill(skill)}
-            >
-              <div class="skill-header">
-                <h3>{skill.name}</h3>
-                <span
-                  class="status-badge"
-                  style="background-color: {getStatusColor(skill.validation_status)}"
-                >
-                  {skill.validation_status}
-                </span>
-              </div>
-              <p class="skill-description">{skill.description}</p>
-              {#if skill.tags.length > 0}
-                <div class="skill-tags">
-                  {#each skill.tags as tag}
-                    <span class="tag">{tag}</span>
-                  {/each}
-                </div>
-              {/if}
-              <div class="skill-meta">
-                {#if skill.version}
-                  <span>v{skill.version}</span>
-                {/if}
-                {#if skill.author}
-                  <span>by {skill.author}</span>
-                {/if}
-              </div>
-              {#if skill.validation_errors.length > 0}
-                <div class="validation-errors">
-                  {#each skill.validation_errors as validationError}
-                    <p class="error-text">{validationError}</p>
-                  {/each}
-                </div>
-              {/if}
-              <div class="skill-actions">
-                <button class="danger" onclick={(e) => handleDeleteSkill(skill, e)}>
-                  Delete
-                </button>
-              </div>
-            </div>
-          {/each}
-        {/if}
-      </div>
-    {:else}
-      <div class="target-list">
-        {#if targets.length === 0}
-          <div class="empty-state">
-            <p>No targets detected</p>
-            <p class="hint">Install a supported AI CLI tool (Claude Code, Codex, Gemini, Cursor, Amp, or Goose)</p>
-          </div>
-        {:else}
-          {#each targets as target}
-            <div class="target-card" class:disabled={!target.enabled}>
-              <div class="target-header">
-                <h3>{target.name}</h3>
-                <span class="target-status" class:exists={target.exists}>
-                  {target.exists ? 'Ready' : 'Not initialized'}
-                </span>
-              </div>
-              <p class="target-path">{target.skills_path}</p>
-              <div class="target-badges">
-                {#if target.auto_detected}
-                  <span class="badge">Auto-detected</span>
-                {/if}
-                {#if target.enabled}
-                  <span class="badge enabled">Enabled</span>
-                {:else}
-                  <span class="badge disabled">Disabled</span>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        {/if}
-      </div>
-    {/if}
-  </main>
-
+  <!-- Editor Panel -->
   {#if editingSkill}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="resize-handle"
-      onmousedown={handleResizeStart}
-    ></div>
-    <aside class="editor-panel">
+    <div class="editor-panel">
       <div class="editor-header">
         <div class="editor-title">
           <h2>{editingSkill.name}</h2>
           {#if hasUnsavedChanges}
-            <span class="unsaved-indicator">Unsaved</span>
+            <span class="unsaved-dot"></span>
           {/if}
         </div>
         <div class="editor-actions">
-          <button onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges} class="primary">
+          <button onclick={handleCloseEditor}>Close</button>
+          <button class="primary" onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges}>
             {isSaving ? 'Saving...' : 'Save'}
-          </button>
-          <button onclick={handleCloseEditor}>
-            Close
           </button>
         </div>
       </div>
+      {#if editingSkill.validation_errors.length > 0}
+        <div class="validation-banner">
+          {#each editingSkill.validation_errors as err}
+            <div class="validation-error">{err}</div>
+          {/each}
+        </div>
+      {/if}
       <div class="editor-container">
         <SkillEditor content={editorContent} onchange={handleEditorChange} />
       </div>
-    </aside>
+    </div>
+  {:else}
+    <div class="editor-placeholder">
+      <div class="placeholder-content">
+        <div class="placeholder-icon">◇</div>
+        <p>Select a skill to edit</p>
+        <p class="placeholder-hint">or press <kbd>⌘N</kbd> to create new</p>
+      </div>
+    </div>
   {/if}
 </div>
 
 <style>
   /* ============================================
-     DESIGN SYSTEM TOKENS
+     DESIGN TOKENS
      ============================================ */
   :root {
-    /* Spacing Scale (4px base) */
+    /* Spacing */
     --space-1: 4px;
     --space-2: 8px;
     --space-3: 12px;
@@ -679,68 +583,49 @@
     --space-6: 24px;
     --space-8: 32px;
 
-    /* Typography Scale */
+    /* macOS traffic light area */
+    --titlebar-height: 52px;
+
+    /* Typography */
     --font-xs: 11px;
     --font-sm: 13px;
     --font-base: 14px;
     --font-lg: 16px;
-    --font-xl: 20px;
-    --font-2xl: 24px;
+    --font-xl: 18px;
 
     --font-weight-normal: 400;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
-    --font-weight-bold: 700;
 
-    --line-height-tight: 1.25;
-    --line-height-normal: 1.5;
-
-    /* Border Radius Scale */
+    /* Border Radius */
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
-    --radius-xl: 12px;
 
-    /* Colors - Slate palette (dark theme) */
-    --color-bg: #0f172a;
-    --color-surface: #1e293b;
-    --color-surface-hover: #273548;
-    --color-border: #334155;
-    --color-border-strong: #475569;
+    /* Colors - Native macOS dark theme */
+    --color-bg: #1c1c1e;
+    --color-sidebar: #2c2c2e;
+    --color-surface: #3a3a3c;
+    --color-surface-hover: #48484a;
+    --color-border: #3d3d3f;
 
-    --color-text: #f1f5f9;
-    --color-text-secondary: #cbd5e1;
-    --color-text-muted: #94a3b8;
-    --color-text-dim: #64748b;
+    --color-text: #ffffff;
+    --color-text-secondary: rgba(255, 255, 255, 0.85);
+    --color-text-muted: rgba(255, 255, 255, 0.55);
+    --color-text-dim: rgba(255, 255, 255, 0.35);
 
-    /* Accent Colors */
-    --color-primary: #3b82f6;
-    --color-primary-hover: #2563eb;
-    --color-primary-muted: rgba(59, 130, 246, 0.15);
+    /* Accent */
+    --color-primary: #0a84ff;
+    --color-primary-hover: #409cff;
+    --color-primary-muted: rgba(10, 132, 255, 0.18);
 
-    --color-success: #22c55e;
-    --color-success-muted: rgba(34, 197, 94, 0.15);
-
-    --color-warning: #f59e0b;
-    --color-warning-muted: rgba(245, 158, 11, 0.15);
-
-    --color-error: #ef4444;
-    --color-error-muted: rgba(239, 68, 68, 0.15);
-
-    --color-danger: #dc2626;
-    --color-danger-hover: #b91c1c;
-
-    /* Shadows */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-
-    /* Transitions */
-    --transition-fast: 0.1s ease;
-    --transition-normal: 0.2s ease;
+    --color-success: #30d158;
+    --color-warning: #ff9f0a;
+    --color-error: #ff453a;
 
     /* Layout */
-    --main-min-width: 320px;
-    --editor-min-width: 400px;
+    --sidebar-width: 220px;
+    --list-width: 300px;
   }
 
   /* ============================================
@@ -753,13 +638,21 @@
   }
 
   :global(body) {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
     font-size: var(--font-base);
-    line-height: var(--line-height-normal);
     background-color: var(--color-bg);
     color: var(--color-text);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+  }
+
+  :global(input), :global(textarea), :global(.cm-editor) {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
   }
 
   /* ============================================
@@ -768,291 +661,394 @@
   .app-container {
     display: flex;
     height: 100vh;
-    min-width: 700px;
     overflow: hidden;
   }
 
-  main {
-    flex: 1 1 auto;
-    min-width: var(--main-min-width);
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: var(--space-4);
-  }
-
-  .app-container.editor-open main {
-    flex: 0 0 auto;
-    width: 360px;
-    min-width: var(--main-min-width);
-    max-width: 420px;
-    padding: var(--space-3);
-  }
-
   /* ============================================
-     HEADER
+     SIDEBAR
      ============================================ */
-  header {
-    text-align: center;
-    margin-bottom: var(--space-4);
-  }
-
-  header h1 {
-    margin: 0;
-    font-size: var(--font-xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-primary);
-    letter-spacing: -0.02em;
-  }
-
-  .subtitle {
-    margin: var(--space-1) 0 0;
-    color: var(--color-text-muted);
-    font-size: var(--font-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  /* ============================================
-     ERROR BANNER
-     ============================================ */
-  .error-banner {
-    background-color: var(--color-error);
-    color: white;
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-lg);
-    margin-bottom: var(--space-4);
+  .sidebar {
+    width: var(--sidebar-width);
+    background: var(--color-sidebar);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid var(--color-border);
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--space-3);
-    font-size: var(--font-sm);
-  }
-
-  .error-banner span {
-    flex: 1;
-    min-width: 0;
-    word-break: break-word;
-  }
-
-  .error-banner button {
-    background: rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.5);
-    color: white;
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-xs);
+    flex-direction: column;
     flex-shrink: 0;
   }
 
-  .error-banner button:hover {
-    background: rgba(255,255,255,0.3);
-    border-color: white;
-  }
-
-  /* ============================================
-     STATS BAR
-     ============================================ */
-  .stats-bar {
-    display: flex;
-    justify-content: center;
-    margin-bottom: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    background-color: var(--color-surface);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--color-border);
-  }
-
-  .stat {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  .sidebar-header {
+    height: var(--titlebar-height);
     padding: 0 var(--space-4);
-    border-right: 1px solid var(--color-border);
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: var(--space-3);
+    -webkit-app-region: drag;
+    flex-shrink: 0;
   }
 
-  .stat:last-child {
-    border-right: none;
+  .sidebar-header h1 {
+    margin: 0;
+    font-size: var(--font-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    letter-spacing: -0.02em;
   }
 
-  .stat-value {
-    font-size: var(--font-lg);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-primary);
+  .sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--space-2) var(--space-3);
   }
 
-  .stat-label {
-    font-size: var(--font-xs);
+  .nav-section {
+    margin-bottom: var(--space-5);
+  }
+
+  .nav-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-1) var(--space-2);
+    margin-bottom: var(--space-1);
+  }
+
+  .nav-section-title {
+    font-size: 11px;
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
 
-  /* ============================================
-     TOOLBAR
-     ============================================ */
-  .toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-4);
-    padding: var(--space-2);
-    background: var(--color-surface);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--color-border);
-  }
-
-  .tabs {
-    display: flex;
-    gap: var(--space-1);
-    flex-shrink: 0;
-  }
-
-  .tab {
-    padding: var(--space-2) var(--space-3);
+  .nav-section-action {
+    width: 20px;
+    height: 20px;
+    padding: 0;
     border: none;
     background: transparent;
-    color: var(--color-text-muted);
-    border-radius: var(--radius-md);
+    color: var(--color-text-dim);
+    font-size: 14px;
     cursor: pointer;
-    transition: all var(--transition-fast);
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .tab:hover {
-    background: var(--color-surface-hover);
+  .nav-section-action:hover {
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+  }
+
+  .nav-empty {
+    padding: var(--space-2);
+    font-size: var(--font-xs);
+    color: var(--color-text-dim);
+    text-align: center;
+  }
+
+  .add-target-form {
+    padding: var(--space-2);
+    margin-bottom: var(--space-2);
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+  }
+
+  .add-target-form select,
+  .add-target-form input {
+    width: 100%;
+    padding: 8px var(--space-2);
+    margin-bottom: var(--space-2);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     color: var(--color-text);
+    font-size: var(--font-xs);
+    box-sizing: border-box;
   }
 
-  .tab.active {
+  .add-target-form select:focus,
+  .add-target-form input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+
+  .add-target-form input::placeholder {
+    color: var(--color-text-dim);
+  }
+
+  .add-target-form .form-actions {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+  }
+
+  .add-target-form .form-actions button {
+    padding: 6px var(--space-3);
+    background: var(--color-surface-hover);
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-xs);
+    cursor: pointer;
+  }
+
+  .add-target-form .form-actions button.primary {
     background: var(--color-primary);
     color: white;
   }
 
-  .toolbar-divider {
-    display: none;
+  .add-target-form .form-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
-  .actions {
+  .nav-item {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-    margin-left: auto;
-  }
-
-  /* Compact toolbar when editor is open */
-  .app-container.editor-open .toolbar {
-    flex-direction: column;
-    align-items: stretch;
-    padding: var(--space-2);
-    gap: var(--space-2);
-  }
-
-  .app-container.editor-open .tabs {
-    justify-content: center;
-  }
-
-  .app-container.editor-open .tab {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-xs);
-    flex: 1;
-    text-align: center;
-  }
-
-  .app-container.editor-open .actions {
-    margin-left: 0;
-    justify-content: center;
-  }
-
-  .app-container.editor-open .actions button {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-xs);
-    flex: 1;
-  }
-
-  /* ============================================
-     BUTTONS
-     ============================================ */
-  button {
-    padding: var(--space-2) var(--space-3);
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-2) var(--space-2);
     border: none;
     background: transparent;
     color: var(--color-text-secondary);
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all var(--transition-fast);
     font-size: var(--font-sm);
-    font-weight: var(--font-weight-medium);
-    white-space: nowrap;
+    text-align: left;
+    min-height: 28px;
+    box-sizing: border-box;
   }
 
-  button:hover:not(:disabled) {
-    background: var(--color-surface-hover);
-    color: var(--color-text);
+  .nav-item.active {
+    background: var(--color-primary-muted);
+    color: var(--color-primary);
   }
 
-  button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  .nav-item.disabled {
+    opacity: 0.5;
   }
 
-  button.primary {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  button.primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-  }
-
-  button.danger {
-    background: var(--color-danger);
-    color: white;
-  }
-
-  button.danger:hover:not(:disabled) {
-    background: var(--color-danger-hover);
-  }
-
-  button.ghost {
-    background: transparent;
+  .nav-item.target-item {
+    cursor: pointer;
+    padding: var(--space-1) var(--space-2);
+    min-height: 24px;
+    font-size: var(--font-xs);
     color: var(--color-text-muted);
   }
 
-  button.ghost:hover:not(:disabled) {
+  .nav-icon {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+    font-size: 10px;
+  }
+
+  .nav-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-count {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+  }
+
+  .target-ready {
+    flex-shrink: 0;
+    color: var(--color-success);
+    font-size: 12px;
+  }
+
+  .sidebar-footer {
+    padding: var(--space-3);
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+
+  .sidebar-action {
+    width: 100%;
+    padding: 10px var(--space-4);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+  }
+
+  .sidebar-action:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  .sidebar-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .sidebar-actions-row {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .sidebar-action-small {
+    flex: 1;
+    padding: 8px;
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sidebar-action-small:hover:not(:disabled) {
     background: var(--color-surface-hover);
-    color: var(--color-text);
+  }
+
+  .sidebar-action-small:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /* ============================================
-     NEW SKILL FORM
+     LIST PANEL
      ============================================ */
-  .new-skill-form {
+  .list-panel {
+    width: var(--list-width);
+    background: var(--color-bg);
+    border-right: 1px solid var(--color-border);
     display: flex;
-    gap: var(--space-2);
-    margin-bottom: var(--space-4);
-    padding: var(--space-3);
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .list-header {
+    height: var(--titlebar-height);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    -webkit-app-region: drag;
+    flex-shrink: 0;
+  }
+
+  .list-title {
+    font-size: var(--font-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+
+  .list-count {
+    font-size: var(--font-xs);
+    color: var(--color-text-dim);
     background: var(--color-surface);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--color-border);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  .error-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: rgba(255, 69, 58, 0.12);
+    color: var(--color-error);
+    font-size: var(--font-xs);
+  }
+
+  .error-banner span {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .error-banner button {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--color-error);
+    cursor: pointer;
+    padding: 0;
+    font-size: 16px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sync-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: rgba(48, 209, 88, 0.12);
+    color: var(--color-success);
+    font-size: var(--font-xs);
+  }
+
+  .sync-banner.has-errors {
+    background: rgba(255, 159, 10, 0.12);
+    color: var(--color-warning);
+  }
+
+  .sync-banner span {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sync-banner button {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+    font-size: 16px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .new-skill-form {
+    padding: var(--space-4);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
   }
 
   .new-skill-form input {
-    flex: 1;
-    min-width: 0;
-    padding: var(--space-2) var(--space-3);
+    width: 100%;
+    padding: 10px var(--space-3);
+    margin-bottom: var(--space-3);
+    background: var(--color-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    background: var(--color-bg);
     color: var(--color-text);
     font-size: var(--font-sm);
-    transition: border-color var(--transition-fast);
-  }
-
-  .new-skill-form input::placeholder {
-    color: var(--color-text-dim);
+    box-sizing: border-box;
   }
 
   .new-skill-form input:focus {
@@ -1060,480 +1056,302 @@
     border-color: var(--color-primary);
   }
 
-  /* ============================================
-     SYNC RESULTS
-     ============================================ */
-  .sync-results {
-    background: var(--color-success-muted);
-    border-radius: var(--radius-lg);
-    padding: var(--space-3);
-    margin-bottom: var(--space-4);
-    border: 1px solid var(--color-success);
+  .new-skill-form input::placeholder {
+    color: var(--color-text-dim);
   }
 
-  .sync-results.has-errors {
-    background: var(--color-error-muted);
-    border-color: var(--color-error);
-  }
-
-  .sync-results-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-bottom: var(--space-3);
-  }
-
-  .sync-results-title {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .sync-icon {
-    font-size: var(--font-lg);
-  }
-
-  .sync-results:not(.has-errors) .sync-icon {
-    color: var(--color-success);
-  }
-
-  .sync-results.has-errors .sync-icon {
-    color: var(--color-error);
-  }
-
-  .sync-results h3 {
-    margin: 0;
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-  }
-
-  .sync-results-summary {
+  .form-actions {
     display: flex;
     gap: var(--space-2);
-    margin-left: auto;
-  }
-
-  .sync-stat {
-    font-size: var(--font-xs);
-    font-weight: var(--font-weight-medium);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    background: var(--color-bg);
-  }
-
-  .sync-stat.created {
-    color: var(--color-success);
-  }
-
-  .sync-stat.removed {
-    color: var(--color-warning);
-  }
-
-  .sync-stat.errors {
-    color: var(--color-error);
-  }
-
-  .sync-stat.unchanged {
-    color: var(--color-text-muted);
-  }
-
-  .sync-dismiss {
-    padding: var(--space-1) var(--space-2);
-    background: transparent;
-    color: var(--color-text-muted);
-    font-size: var(--font-lg);
-    line-height: 1;
-  }
-
-  .sync-dismiss:hover {
-    color: var(--color-text);
-    background: var(--color-surface-hover);
-  }
-
-  .sync-targets {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .sync-target {
-    background: var(--color-bg);
-    border-radius: var(--radius-md);
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid transparent;
-  }
-
-  .sync-target.has-errors {
-    border-color: var(--color-error);
-  }
-
-  .sync-target-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-  }
-
-  .sync-target-name {
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text);
-  }
-
-  .sync-target-stats {
-    display: flex;
-    gap: var(--space-1);
-  }
-
-  .stat-badge {
-    font-size: var(--font-xs);
-    padding: 2px var(--space-2);
-    border-radius: var(--radius-sm);
-    font-weight: var(--font-weight-medium);
-  }
-
-  .stat-badge.created {
-    background: var(--color-success-muted);
-    color: var(--color-success);
-  }
-
-  .stat-badge.removed {
-    background: var(--color-warning-muted);
-    color: var(--color-warning);
-  }
-
-  .stat-badge.unchanged {
-    background: var(--color-surface);
-    color: var(--color-text-muted);
-  }
-
-  .stat-badge.errors {
-    background: var(--color-error-muted);
-    color: var(--color-error);
-  }
-
-  .sync-errors-list {
+    justify-content: flex-end;
     margin-top: var(--space-2);
-    padding-top: var(--space-2);
-    border-top: 1px solid var(--color-border);
   }
 
-  .sync-error-item {
-    font-size: var(--font-xs);
-    color: var(--color-error);
-    padding: var(--space-1) 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-    word-break: break-all;
-  }
-
-  .sync-error-item + .sync-error-item {
-    border-top: 1px dashed var(--color-border);
-  }
-
-  .sync-error-item strong {
+  .form-actions button {
+    padding: 8px var(--space-4);
+    background: var(--color-surface-hover);
+    border: none;
+    border-radius: var(--radius-md);
     color: var(--color-text-secondary);
+    font-size: var(--font-sm);
+    cursor: pointer;
   }
 
-  /* ============================================
-     LISTS
-     ============================================ */
-  .loading {
+  .form-actions button:hover:not(:disabled) {
+    background: var(--color-bg);
+  }
+
+  .form-actions button.primary {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .form-actions button.primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  .form-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .skill-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .loading, .empty-state {
+    padding: var(--space-8) var(--space-4);
     text-align: center;
-    padding: var(--space-8);
     color: var(--color-text-muted);
     font-size: var(--font-sm);
-  }
-
-  .empty-state {
-    text-align: center;
-    padding: var(--space-8);
-    background: var(--color-surface);
-    border-radius: var(--radius-xl);
-    border: 1px solid var(--color-border);
   }
 
   .empty-state p {
     margin: 0;
-    color: var(--color-text-secondary);
   }
 
-  .empty-state .hint {
-    margin-top: var(--space-2);
-    color: var(--color-text-muted);
-    font-size: var(--font-sm);
-  }
-
-  .empty-actions {
-    display: flex;
-    gap: var(--space-3);
-    justify-content: center;
+  .empty-state button {
     margin-top: var(--space-4);
-  }
-
-  .skill-list, .target-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  /* ============================================
-     SKILL CARD
-     ============================================ */
-  .skill-card {
+    padding: 10px var(--space-5);
     background: var(--color-surface);
-    border-radius: var(--radius-xl);
-    padding: var(--space-4);
-    border: 1px solid var(--color-border);
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-sm);
     cursor: pointer;
-    transition: all var(--transition-fast);
   }
 
-  .skill-card:hover {
-    border-color: var(--color-primary);
+  .empty-state button:hover {
     background: var(--color-surface-hover);
   }
 
-  .skill-card.selected {
-    border-color: var(--color-primary);
+  .skill-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    min-height: 56px;
+    box-sizing: border-box;
+  }
+
+  /* Native: no hover effect, only selected state */
+  .skill-item.selected {
     background: var(--color-primary-muted);
   }
 
-  .skill-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
-  }
-
-  .skill-header h3 {
-    margin: 0;
-    font-size: var(--font-base);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-  }
-
-  .status-badge {
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-xs);
-    font-weight: var(--font-weight-medium);
-    color: white;
-    text-transform: capitalize;
+  .skill-status {
     flex-shrink: 0;
-  }
-
-  .skill-description {
-    margin: 0 0 var(--space-3);
-    color: var(--color-text-muted);
-    font-size: var(--font-sm);
-    line-height: var(--line-height-normal);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .skill-tags {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-    margin-bottom: var(--space-2);
-  }
-
-  .tag {
-    padding: var(--space-1) var(--space-2);
-    background: var(--color-bg);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-xs);
-    color: var(--color-text-muted);
-  }
-
-  .skill-meta {
-    display: flex;
-    gap: var(--space-3);
-    font-size: var(--font-xs);
-    color: var(--color-text-dim);
-    margin-bottom: var(--space-2);
-  }
-
-  .validation-errors {
-    background: var(--color-error-muted);
-    border: 1px solid var(--color-error);
-    border-radius: var(--radius-md);
-    padding: var(--space-2);
-    margin-bottom: var(--space-2);
-  }
-
-  .error-text {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--color-error);
-  }
-
-  .skill-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
-    padding-top: var(--space-2);
-    border-top: 1px solid var(--color-border);
-  }
-
-  /* ============================================
-     TARGET CARD
-     ============================================ */
-  .target-card {
-    background: var(--color-surface);
-    border-radius: var(--radius-xl);
-    padding: var(--space-4);
-    border: 1px solid var(--color-border);
-  }
-
-  .target-card.disabled {
-    opacity: 0.5;
-  }
-
-  .target-header {
-    display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
+    justify-content: center;
+    width: 20px;
   }
 
-  .target-header h3 {
-    margin: 0;
-    font-size: var(--font-base);
-    font-weight: var(--font-weight-semibold);
+  .status-dot {
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-text-dim);
   }
 
-  .target-status {
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-xs);
-    font-weight: var(--font-weight-medium);
-    background: var(--color-warning);
-    color: white;
-  }
-
-  .target-status.exists {
+  .status-dot.valid {
     background: var(--color-success);
   }
 
-  .target-path {
-    margin: 0 0 var(--space-2);
-    font-size: var(--font-xs);
-    color: var(--color-text-dim);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-    word-break: break-all;
+  .status-dot.invalid {
+    background: var(--color-error);
   }
 
-  .target-badges {
+  .skill-info {
+    flex: 1;
+    min-width: 0;
     display: flex;
-    gap: var(--space-2);
+    flex-direction: column;
+    gap: 2px;
   }
 
-  .badge {
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
+  .skill-name {
+    font-size: var(--font-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .skill-description {
     font-size: var(--font-xs);
-    background: var(--color-bg);
     color: var(--color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.3;
   }
 
-  .badge.enabled {
-    background: var(--color-success-muted);
-    color: var(--color-success);
-  }
-
-  .badge.disabled {
-    background: var(--color-error-muted);
-    color: var(--color-error);
-  }
-
-  /* ============================================
-     RESIZE HANDLE
-     ============================================ */
-  .resize-handle {
-    width: 4px;
-    background: var(--color-border);
-    cursor: col-resize;
+  .skill-delete {
     flex-shrink: 0;
-    transition: background-color var(--transition-fast);
+    opacity: 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-dim);
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .resize-handle:hover {
-    background: var(--color-primary);
+  .skill-item:hover .skill-delete {
+    opacity: 1;
   }
 
-  .app-container.is-resizing {
-    cursor: col-resize;
-    user-select: none;
-  }
-
-  .app-container.is-resizing .resize-handle {
-    background: var(--color-primary);
+  .skill-delete:hover {
+    color: var(--color-error);
+    background: rgba(255, 69, 58, 0.15);
   }
 
   /* ============================================
      EDITOR PANEL
      ============================================ */
   .editor-panel {
-    flex: 1 1 auto;
-    min-width: var(--editor-min-width);
-    background: var(--color-surface);
+    flex: 1;
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
+    min-width: 400px;
+    background: var(--color-sidebar);
   }
 
   .editor-header {
+    height: var(--titlebar-height);
     display: flex;
+    align-items: flex-end;
     justify-content: space-between;
-    align-items: center;
-    padding: var(--space-3) var(--space-4);
-    background: var(--color-bg);
+    padding: 0 var(--space-4);
+    padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg);
+    -webkit-app-region: drag;
     flex-shrink: 0;
   }
 
   .editor-title {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    min-width: 0;
+    gap: var(--space-2);
   }
 
   .editor-title h2 {
     margin: 0;
-    font-size: var(--font-base);
+    font-size: var(--font-sm);
     font-weight: var(--font-weight-semibold);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
-  .unsaved-indicator {
-    padding: var(--space-1) var(--space-2);
+  .unsaved-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     background: var(--color-warning);
-    color: white;
-    border-radius: var(--radius-sm);
-    font-size: var(--font-xs);
-    font-weight: var(--font-weight-medium);
-    flex-shrink: 0;
   }
 
   .editor-actions {
     display: flex;
     gap: var(--space-2);
-    flex-shrink: 0;
+    -webkit-app-region: no-drag;
+  }
+
+  .editor-actions button {
+    padding: var(--space-1) var(--space-3);
+    background: var(--color-surface);
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-xs);
+    cursor: pointer;
+  }
+
+  .editor-actions button.primary {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .editor-actions button:hover:not(:disabled) {
+    background: var(--color-surface-hover);
+  }
+
+  .editor-actions button.primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  .editor-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .validation-banner {
+    padding: var(--space-2) var(--space-4);
+    background: rgba(255, 69, 58, 0.15);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .validation-error {
+    font-size: var(--font-xs);
+    color: var(--color-error);
+    padding: var(--space-1) 0;
   }
 
   .editor-container {
     flex: 1;
     overflow: hidden;
+  }
+
+  /* ============================================
+     EDITOR PLACEHOLDER
+     ============================================ */
+  .editor-placeholder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg);
+  }
+
+  .placeholder-content {
+    text-align: center;
+    color: var(--color-text-dim);
+  }
+
+  .placeholder-icon {
+    font-size: 48px;
+    margin-bottom: var(--space-4);
+    opacity: 0.3;
+  }
+
+  .placeholder-content p {
+    margin: 0;
+    font-size: var(--font-sm);
+  }
+
+  .placeholder-hint {
+    margin-top: var(--space-2) !important;
+    font-size: var(--font-xs) !important;
+    color: var(--color-text-dim);
+  }
+
+  .placeholder-hint kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: var(--font-xs);
   }
 </style>

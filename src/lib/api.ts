@@ -70,3 +70,25 @@ export async function isFileMergeAvailable(): Promise<boolean> {
 export async function launchFileMerge(existing: string, incoming: string): Promise<void> {
   return invoke<void>('launch_filemerge', { existing, incoming });
 }
+
+// Target management
+
+export async function toggleTarget(targetId: string): Promise<boolean> {
+  return invoke<boolean>('toggle_target', { targetId });
+}
+
+export async function setTargetEnabled(targetId: string, enabled: boolean): Promise<void> {
+  return invoke<void>('set_target_enabled', { targetId, enabled });
+}
+
+export async function addCustomTarget(targetId: string, skillsPath: string): Promise<TargetInfo> {
+  return invoke<TargetInfo>('add_custom_target', { targetId, skillsPath });
+}
+
+export async function removeCustomTarget(targetId: string): Promise<void> {
+  return invoke<void>('remove_custom_target', { targetId });
+}
+
+export async function getAvailableTargetTypes(): Promise<[string, string][]> {
+  return invoke<[string, string][]>('get_available_target_types');
+}

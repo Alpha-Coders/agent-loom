@@ -226,6 +226,81 @@ pub fn import_all_skills(state: tauri::State<'_, AppState>) -> Result<ImportResu
     })
 }
 
+// === Target Management Commands ===
+
+/// Toggle a target's enabled state
+#[tauri::command]
+pub fn toggle_target(state: tauri::State<'_, AppState>, target_id: String) -> Result<bool, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    manager
+        .toggle_target(&target_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Set a target's enabled state
+#[tauri::command]
+pub fn set_target_enabled(
+    state: tauri::State<'_, AppState>,
+    target_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    manager
+        .set_target_enabled(&target_id, enabled)
+        .map_err(|e| e.to_string())
+}
+
+/// Add a custom target with a specific path
+#[tauri::command]
+pub fn add_custom_target(
+    state: tauri::State<'_, AppState>,
+    target_id: String,
+    skills_path: String,
+) -> Result<TargetInfo, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    manager
+        .add_custom_target(&target_id, PathBuf::from(&skills_path))
+        .map_err(|e| e.to_string())?;
+
+    // Return the newly added target
+    let target = manager
+        .targets()
+        .iter()
+        .find(|t| t.id() == target_id)
+        .ok_or_else(|| "Target not found after creation".to_string())?;
+    Ok(TargetInfo::from(target))
+}
+
+/// Remove a custom target
+#[tauri::command]
+pub fn remove_custom_target(
+    state: tauri::State<'_, AppState>,
+    target_id: String,
+) -> Result<(), String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    manager
+        .remove_custom_target(&target_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Get available target types that can be added
+#[tauri::command]
+pub fn get_available_target_types(state: tauri::State<'_, AppState>) -> Result<Vec<(String, String)>, String> {
+    use talent_core::TargetKind;
+
+    let manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let existing_ids: Vec<_> = manager.targets().iter().map(|t| t.id().to_string()).collect();
+
+    // Return target types that aren't already configured
+    let available: Vec<_> = TargetKind::all()
+        .iter()
+        .filter(|k| !existing_ids.contains(&k.id().to_string()))
+        .map(|k| (k.id().to_string(), k.display_name().to_string()))
+        .collect();
+
+    Ok(available)
+}
+
 /// Check if FileMerge (opendiff) is available
 #[tauri::command]
 pub fn is_filemerge_available() -> bool {
