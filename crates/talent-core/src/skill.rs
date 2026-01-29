@@ -20,6 +20,47 @@ use walkdir::WalkDir;
 /// The filename we look for in skill directories
 pub const SKILL_FILE_NAME: &str = "SKILL.md";
 
+/// Check if a skill name is valid (kebab-case)
+///
+/// Valid names:
+/// - Start with a lowercase letter
+/// - Contain only lowercase letters, digits, and hyphens
+/// - No leading, trailing, or consecutive hyphens
+pub fn is_valid_skill_name(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+
+    let chars: Vec<char> = name.chars().collect();
+
+    // Must start with lowercase letter
+    if !chars[0].is_ascii_lowercase() {
+        return false;
+    }
+
+    // Must end with alphanumeric
+    if !chars.last().unwrap().is_ascii_alphanumeric() {
+        return false;
+    }
+
+    // Check all characters and no consecutive hyphens
+    let mut prev_was_hyphen = false;
+    for c in &chars {
+        if *c == '-' {
+            if prev_was_hyphen {
+                return false; // No consecutive hyphens
+            }
+            prev_was_hyphen = true;
+        } else if c.is_ascii_lowercase() || c.is_ascii_digit() {
+            prev_was_hyphen = false;
+        } else {
+            return false; // Invalid character
+        }
+    }
+
+    true
+}
+
 /// Skill metadata parsed from YAML frontmatter
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SkillMeta {

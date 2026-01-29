@@ -113,12 +113,8 @@ impl TargetKind {
 
     /// Get the skills subdirectory name within the config dir
     fn skills_subdir(&self) -> &'static str {
-        match self {
-            // Claude Code uses "commands" instead of "skills"
-            TargetKind::ClaudeCode => "commands",
-            // All others use "skills" per agentskills.io convention
-            _ => "skills",
-        }
+        // All targets use "skills" directory
+        "skills"
     }
 }
 

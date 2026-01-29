@@ -123,6 +123,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             manager: Mutex::new(manager),
         })
@@ -153,6 +154,7 @@ pub fn run() {
             commands::validate_all,
             commands::refresh_skills,
             commands::delete_skill,
+            commands::rename_skill,
             commands::get_stats,
             commands::get_skill_content,
             commands::save_skill_content,

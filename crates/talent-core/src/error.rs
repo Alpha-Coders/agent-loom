@@ -37,6 +37,14 @@ pub enum Error {
     #[error("Skill not found: {0}")]
     SkillNotFound(PathBuf),
 
+    /// Skill already exists with that name
+    #[error("Skill already exists: {0}")]
+    SkillAlreadyExists(String),
+
+    /// Invalid skill name format
+    #[error("Invalid skill name '{0}': must be kebab-case (lowercase letters, numbers, hyphens)")]
+    InvalidSkillName(String),
+
     /// SKILL.md file missing from skill directory
     #[error("Missing SKILL.md in skill directory: {0}")]
     MissingSkillFile(PathBuf),

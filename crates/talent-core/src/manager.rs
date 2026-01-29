@@ -161,6 +161,18 @@ impl SkillManager {
 
     /// Create a new skill
     pub fn create_skill(&mut self, name: &str, description: &str) -> Result<&Skill> {
+        // Validate name format
+        if !crate::skill::is_valid_skill_name(name) {
+            return Err(Error::InvalidSkillName(name.to_string()));
+        }
+
+        // Check if skill already exists
+        let skill_path = self.config.skills_dir.join(name);
+        if skill_path.exists() {
+            return Err(Error::SkillAlreadyExists(name.to_string()));
+        }
+
+        // Create the skill
         let skill = Skill::create(&self.config.skills_dir, name, description)?;
         self.skills.push(skill);
 
@@ -168,7 +180,7 @@ impl SkillManager {
         Ok(self.skills.last().unwrap())
     }
 
-    /// Delete a skill (removes the skill directory)
+    /// Delete a skill (removes symlinks first, then the skill directory)
     pub fn delete_skill(&mut self, name: &str) -> Result<()> {
         let skill_path = self.config.skills_dir.join(name);
 
@@ -176,13 +188,75 @@ impl SkillManager {
             return Err(Error::SkillNotFound(skill_path));
         }
 
-        // Remove the directory
+        // Remove symlinks from all targets FIRST
+        for target in &self.targets {
+            if target.enabled {
+                let symlink = target.skill_link_path(name);
+                if symlink.exists() || symlink.is_symlink() {
+                    let _ = std::fs::remove_file(&symlink);
+                }
+            }
+        }
+
+        // Remove the skill directory
         std::fs::remove_dir_all(&skill_path).map_err(|e| Error::io(&skill_path, e))?;
 
         // Remove from our list
         self.skills.retain(|s| s.name() != name);
 
         Ok(())
+    }
+
+    /// Rename a skill (renames the skill directory and updates symlinks)
+    pub fn rename_skill(&mut self, old_name: &str, new_name: &str) -> Result<&Skill> {
+        // Validate new name
+        if !crate::skill::is_valid_skill_name(new_name) {
+            return Err(Error::InvalidSkillName(new_name.to_string()));
+        }
+
+        let old_path = self.config.skills_dir.join(old_name);
+        let new_path = self.config.skills_dir.join(new_name);
+
+        if !old_path.exists() {
+            return Err(Error::SkillNotFound(old_path));
+        }
+
+        if new_path.exists() {
+            return Err(Error::SkillAlreadyExists(new_name.to_string()));
+        }
+
+        // Remove old symlinks from all targets first
+        for target in &self.targets {
+            if target.enabled {
+                let old_symlink = target.skill_link_path(old_name);
+                if old_symlink.is_symlink() {
+                    let _ = std::fs::remove_file(&old_symlink);
+                }
+            }
+        }
+
+        // Rename the directory
+        std::fs::rename(&old_path, &new_path).map_err(|e| Error::io(&old_path, e))?;
+
+        // Reload the skill from the new path
+        let skill = Skill::load(&new_path)?;
+
+        // Update in our list
+        if let Some(existing) = self.skills.iter_mut().find(|s| s.name() == old_name) {
+            *existing = skill;
+        }
+
+        // Create new symlinks
+        for target in &self.targets {
+            if target.enabled {
+                let new_symlink = target.skill_link_path(new_name);
+                let _ = std::os::unix::fs::symlink(&new_path, &new_symlink);
+            }
+        }
+
+        // Return reference to renamed skill
+        self.skills.iter().find(|s| s.name() == new_name)
+            .ok_or_else(|| Error::SkillNotFound(new_path))
     }
 
     /// Poll for file watcher events

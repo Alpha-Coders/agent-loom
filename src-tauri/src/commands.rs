@@ -74,6 +74,14 @@ pub fn delete_skill(state: tauri::State<'_, AppState>, name: String) -> Result<(
     manager.delete_skill(&name).map_err(|e| e.to_string())
 }
 
+/// Rename a skill
+#[tauri::command]
+pub fn rename_skill(state: tauri::State<'_, AppState>, old_name: String, new_name: String) -> Result<SkillInfo, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let skill = manager.rename_skill(&old_name, &new_name).map_err(|e| e.to_string())?;
+    Ok(SkillInfo::from(skill))
+}
+
 /// Get manager statistics
 #[tauri::command]
 pub fn get_stats(state: tauri::State<'_, AppState>) -> Result<StatsInfo, String> {

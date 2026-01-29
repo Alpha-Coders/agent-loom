@@ -35,6 +35,10 @@ export async function deleteSkill(name: string): Promise<void> {
   return invoke<void>('delete_skill', { name });
 }
 
+export async function renameSkill(oldName: string, newName: string): Promise<SkillInfo> {
+  return invoke<SkillInfo>('rename_skill', { oldName, newName });
+}
+
 export async function getStats(): Promise<StatsInfo> {
   return invoke<StatsInfo>('get_stats');
 }
