@@ -43,9 +43,9 @@ Filename: plans/20260129-talent-implementation.md
 4. [x] Implement skill model with frontmatter parsing (`crates/talent-core/src/skill.rs`)
 5. [x] Implement target model with auto-detection (`crates/talent-core/src/target.rs`)
 6. [x] Implement validation engine (`crates/talent-core/src/validator.rs`)
-7. [ ] Implement symlink syncer (`crates/talent-core/src/syncer.rs`)
-8. [ ] Implement file watcher (`crates/talent-core/src/watcher.rs`)
-9. [ ] Create skill manager integration layer (`crates/talent-core/src/manager.rs`)
+7. [x] Implement symlink syncer (`crates/talent-core/src/syncer.rs`)
+8. [x] Implement file watcher (`crates/talent-core/src/watcher.rs`)
+9. [x] Create skill manager integration layer (`crates/talent-core/src/manager.rs`)
 10. [ ] Complete CLI implementation with all commands (`crates/talent-cli/src/main.rs`)
 
 ### Phase 2: Tauri Shell
@@ -66,18 +66,20 @@ Filename: plans/20260129-talent-implementation.md
 ## Implementation State
 
 - State: in-progress
-- Current step: 7 - Implement symlink syncer
+- Current step: 10 - Complete CLI implementation
 - Last updated: 2026-01-29
 - Checkpoints:
   - 2026-01-29 not-started Initial plan created
   - 2026-01-29 in-progress Steps 1-3 completed (workspace setup, error types, config)
   - 2026-01-29 in-progress Steps 4-6 completed (skill model, target model, validator). All 35 tests passing.
+  - 2026-01-29 in-progress Steps 7-9 completed (syncer, watcher, manager). All 56 tests passing.
 
 ## Status Updates
 
 - 2026-01-29 not-started Plan migrated to template format
 - 2026-01-29 in-progress Completed batch 1: Rust workspace initialized, error types implemented with thiserror, config module with TOML serialization. All 9 tests passing.
 - 2026-01-29 in-progress Completed batch 2: Skill model with frontmatter parsing (YAML between --- delimiters), target model with auto-detection for 6 CLIs (Claude Code, Codex, Gemini, Cursor, Amp, Goose), validation engine with kebab-case name enforcement. All 35 tests passing.
+- 2026-01-29 in-progress Completed batch 3: Symlink syncer with create/remove/unchanged tracking, file watcher with debounced events, skill manager facade integrating all components. All 56 tests passing.
 
 ## Dependencies
 
