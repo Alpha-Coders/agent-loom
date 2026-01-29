@@ -46,7 +46,7 @@ package_macos() {
     local arch="$2"
     local output_dir="$3"
 
-    local app_path="$PROJECT_ROOT/src-tauri/target/release/bundle/macos/Talent.app"
+    local app_path="$PROJECT_ROOT/target/release/bundle/macos/Talent.app"
 
     if [ ! -d "$app_path" ]; then
         log_warn "macOS .app not found at $app_path"
@@ -69,7 +69,7 @@ package_linux() {
     local version="$1"
     local output_dir="$2"
 
-    local bundle_dir="$PROJECT_ROOT/src-tauri/target/release/bundle"
+    local bundle_dir="$PROJECT_ROOT/target/release/bundle"
 
     # Look for AppImage
     local appimage=$(find "$bundle_dir" -name "*.AppImage" 2>/dev/null | head -1)
@@ -89,7 +89,7 @@ package_windows() {
     local version="$1"
     local output_dir="$2"
 
-    local bundle_dir="$PROJECT_ROOT/src-tauri/target/release/bundle"
+    local bundle_dir="$PROJECT_ROOT/target/release/bundle"
 
     # Look for portable exe (nsis)
     local exe=$(find "$bundle_dir" -name "*.exe" 2>/dev/null | head -1)

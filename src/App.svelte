@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, getStats, getSkillContent, saveSkillContent, validateSkill } from './lib/api';
+  import { ask } from '@tauri-apps/plugin-dialog';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportDialog from './lib/ImportDialog.svelte';
@@ -154,15 +155,25 @@
   }
 
   async function handleCreateSkill() {
-    if (!newSkillName.trim() || !newSkillDescription.trim()) return;
+    const name = newSkillName.trim();
+    const description = newSkillDescription.trim();
+
+    if (!name || !description) return;
 
     try {
       error = null;
-      await createSkill(newSkillName.trim(), newSkillDescription.trim());
+      const newSkill = await createSkill(name, description);
+
+      // Optimistically add to list
+      skills = [...skills, newSkill];
+
+      // Reset form
       newSkillName = '';
       newSkillDescription = '';
       showNewSkillForm = false;
-      await loadData();
+
+      // Refresh stats
+      stats = await getStats();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -170,21 +181,28 @@
 
   async function handleDeleteSkill(name: string, event: MouseEvent) {
     event.stopPropagation();
-    if (!confirm(`Delete skill "${name}"?`)) return;
+
+    // Close editor FIRST if we're deleting the skill being edited
+    const wasEditing = editingSkill?.name === name;
+    if (wasEditing) {
+      editingSkill = null;
+      editorContent = '';
+      originalContent = '';
+    }
+
+    // Optimistically remove from list immediately for fast UI
+    const previousSkills = skills;
+    skills = skills.filter(s => s.name !== name);
 
     try {
       error = null;
       await deleteSkill(name);
 
-      // Close editor if we deleted the skill being edited
-      if (editingSkill?.name === name) {
-        editingSkill = null;
-        editorContent = '';
-        originalContent = '';
-      }
-
-      await loadData();
+      // Refresh stats
+      stats = await getStats();
     } catch (e) {
+      // Restore on error
+      skills = previousSkills;
       error = e instanceof Error ? e.message : String(e);
     }
   }
@@ -192,9 +210,11 @@
   async function handleEditSkill(skill: SkillInfo) {
     // Warn if unsaved changes
     if (hasUnsavedChanges && editingSkill) {
-      if (!confirm('You have unsaved changes. Discard and open another skill?')) {
-        return;
-      }
+      const confirmed = await ask('You have unsaved changes. Discard and open another skill?', {
+        title: 'Unsaved Changes',
+        kind: 'warning',
+      });
+      if (!confirmed) return;
     }
 
     try {
@@ -208,6 +228,15 @@
     }
   }
 
+  // Extract the name from YAML frontmatter
+  function extractNameFromContent(content: string): string | null {
+    const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+    if (!match) return null;
+    const frontmatter = match[1];
+    const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+    return nameMatch ? nameMatch[1].trim() : null;
+  }
+
   async function handleSaveSkill() {
     if (!editingSkill) return;
 
@@ -215,31 +244,55 @@
       isSaving = true;
       error = null;
 
+      const currentName = editingSkill.name;
+      const newName = extractNameFromContent(editorContent);
+      let skillName = currentName;
+      let didRename = false;
+
+      // Check if name changed in frontmatter
+      if (newName && newName !== currentName) {
+        // Rename the skill first (this also updates symlinks)
+        await renameSkill(currentName, newName);
+        skillName = newName;
+        didRename = true;
+      }
+
       // Save the content
-      const updatedSkill = await saveSkillContent(editingSkill.name, editorContent);
+      await saveSkillContent(skillName, editorContent);
 
       // Re-validate the skill
-      const validatedSkill = await validateSkill(editingSkill.name);
+      const validatedSkill = await validateSkill(skillName);
 
       // Update local state
       originalContent = editorContent;
       editingSkill = validatedSkill;
 
       // Update skills list
-      skills = skills.map(s => s.name === validatedSkill.name ? validatedSkill : s);
+      if (didRename) {
+        // Replace old skill with new one
+        skills = skills.map(s => s.name === currentName ? validatedSkill : s);
+      } else {
+        // Just update in place
+        skills = skills.map(s => s.name === skillName ? validatedSkill : s);
+      }
+
       stats = await getStats();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
+      // On error, reload data to get back to a consistent state
+      await loadData();
     } finally {
       isSaving = false;
     }
   }
 
-  function handleCloseEditor() {
+  async function handleCloseEditor() {
     if (hasUnsavedChanges) {
-      if (!confirm('You have unsaved changes. Discard?')) {
-        return;
-      }
+      const confirmed = await ask('You have unsaved changes. Discard?', {
+        title: 'Unsaved Changes',
+        kind: 'warning',
+      });
+      if (!confirmed) return;
     }
     editingSkill = null;
     editorContent = '';
@@ -265,9 +318,9 @@
 
   function getSyncSummary(result: SyncResult): string {
     const parts = [];
-    if (result.created.length > 0) parts.push(`+${result.created.length}`);
-    if (result.removed.length > 0) parts.push(`-${result.removed.length}`);
-    if (result.unchanged.length > 0) parts.push(`=${result.unchanged.length}`);
+    if (result.created.length > 0) parts.push(`＋${result.created.length}`);
+    if (result.removed.length > 0) parts.push(`−${result.removed.length}`);
+    if (result.unchanged.length > 0) parts.push(`✓${result.unchanged.length}`);
     return parts.join(' ') || 'No changes';
   }
 
@@ -396,13 +449,13 @@
           </div>
           <div class="sync-results-summary">
             {#if totalCreated > 0}
-              <span class="sync-stat created">+{totalCreated} created</span>
+              <span class="sync-stat created">+{totalCreated} added</span>
             {/if}
             {#if totalRemoved > 0}
               <span class="sync-stat removed">-{totalRemoved} removed</span>
             {/if}
             {#if totalErrors > 0}
-              <span class="sync-stat errors">{totalErrors} errors</span>
+              <span class="sync-stat errors">✕ {totalErrors} errors</span>
             {/if}
             {#if totalCreated === 0 && totalRemoved === 0 && totalErrors === 0}
               <span class="sync-stat unchanged">All up to date</span>
@@ -423,10 +476,10 @@
                     <span class="stat-badge removed">-{result.removed.length}</span>
                   {/if}
                   {#if result.unchanged.length > 0}
-                    <span class="stat-badge unchanged">={result.unchanged.length}</span>
+                    <span class="stat-badge unchanged">✓{result.unchanged.length}</span>
                   {/if}
                   {#if result.errors.length > 0}
-                    <span class="stat-badge errors">{result.errors.length} errors</span>
+                    <span class="stat-badge errors">✕{result.errors.length}</span>
                   {/if}
                 </div>
               </div>
@@ -740,22 +793,30 @@
     margin-bottom: var(--space-4);
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: var(--space-3);
     font-size: var(--font-sm);
   }
 
+  .error-banner span {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+  }
+
   .error-banner button {
-    background: transparent;
+    background: rgba(255,255,255,0.2);
     border: 1px solid rgba(255,255,255,0.5);
     color: white;
     padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: var(--font-xs);
+    flex-shrink: 0;
   }
 
   .error-banner button:hover {
-    background: rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.3);
     border-color: white;
   }
 
