@@ -13,14 +13,26 @@ use tauri::Manager;
 use talent_core::{ConflictResolution, SkillManager, ValidationStatus};
 
 /// Skill information for the frontend
+/// See https://agentskills.io/specification for field definitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillInfo {
+    // Required fields (per spec)
     pub name: String,
     pub folder_name: String,
     pub description: String,
+
+    // Optional spec fields
+    pub license: Option<String>,
+    pub compatibility: Option<String>,
+    pub metadata: std::collections::HashMap<String, String>,
+    pub allowed_tools: Option<String>,
+
+    // Legacy fields (not in spec, kept for backward compatibility)
     pub tags: Vec<String>,
     pub version: Option<String>,
     pub author: Option<String>,
+
+    // Internal fields
     pub path: String,
     pub validation_status: String,
     pub validation_errors: Vec<String>,
@@ -32,6 +44,10 @@ impl From<&talent_core::Skill> for SkillInfo {
             name: skill.meta.name.clone(),
             folder_name: skill.folder_name().to_string(),
             description: skill.meta.description.clone(),
+            license: skill.meta.license.clone(),
+            compatibility: skill.meta.compatibility.clone(),
+            metadata: skill.meta.metadata.clone(),
+            allowed_tools: skill.meta.allowed_tools.clone(),
             tags: skill.meta.tags.clone(),
             version: skill.meta.version.clone(),
             author: skill.meta.author.clone(),

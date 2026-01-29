@@ -1,12 +1,24 @@
 // Types that mirror the Rust backend structs
+// See https://agentskills.io/specification for field definitions
 
 export interface SkillInfo {
+  // Required fields (per spec)
   name: string;
   folder_name: string;
   description: string;
+
+  // Optional spec fields
+  license: string | null;
+  compatibility: string | null;
+  metadata: Record<string, string>;
+  allowed_tools: string | null;
+
+  // Legacy fields (not in spec, kept for backward compatibility)
   tags: string[];
   version: string | null;
   author: string | null;
+
+  // Internal fields
   path: string;
   validation_status: 'unknown' | 'valid' | 'invalid';
   validation_errors: string[];

@@ -115,24 +115,45 @@ pub fn to_kebab_case(input: &str) -> String {
 }
 
 /// Skill metadata parsed from YAML frontmatter
+/// See https://agentskills.io/specification for the full spec
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SkillMeta {
-    /// Unique skill identifier (required)
+    /// Unique skill identifier (required, 1-64 chars, kebab-case)
     pub name: String,
 
-    /// Human-readable description (required)
+    /// Human-readable description (required, 1-1024 chars)
     pub description: String,
 
-    /// Optional list of tags for categorization
-    #[serde(default)]
+    /// License name or reference to bundled license file (optional)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+
+    /// Environment requirements: intended product, system packages, network access (optional, max 500 chars)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compatibility: Option<String>,
+
+    /// Arbitrary key-value metadata (optional)
+    /// Spec recommends: author, version, etc.
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub metadata: std::collections::HashMap<String, String>,
+
+    /// Pre-approved tools the skill may use (experimental, space-delimited)
+    /// Example: "Bash(git:*) Bash(jq:*) Read"
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "allowed-tools")]
+    pub allowed_tools: Option<String>,
+
+    // --- Legacy fields (not in spec, kept for backward compatibility) ---
+
+    /// Optional list of tags for categorization (legacy, not in spec)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
 
-    /// Optional version string
-    #[serde(default)]
+    /// Optional version string (legacy - spec puts this in metadata)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
 
-    /// Optional author
-    #[serde(default)]
+    /// Optional author (legacy - spec puts this in metadata)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
 }
 
