@@ -162,6 +162,7 @@ pub fn run() {
             commands::save_skill_content,
             commands::discover_importable_skills,
             commands::import_skills,
+            commands::import_all_skills,
             commands::is_filemerge_available,
             commands::launch_filemerge,
         ])

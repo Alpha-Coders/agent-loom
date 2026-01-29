@@ -59,6 +59,10 @@ export async function importSkills(selections: ImportSelectionInfo[]): Promise<I
   return invoke<ImportResultInfo>('import_skills', { selections });
 }
 
+export async function importAllSkills(): Promise<ImportResultInfo> {
+  return invoke<ImportResultInfo>('import_all_skills');
+}
+
 export async function isFileMergeAvailable(): Promise<boolean> {
   return invoke<boolean>('is_filemerge_available');
 }

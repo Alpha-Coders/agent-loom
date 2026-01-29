@@ -172,6 +172,60 @@ pub fn import_skills(
     })
 }
 
+/// Import all skills from target CLIs automatically
+///
+/// Discovers all importable skills and imports them with overwrite enabled.
+/// Returns the import result with sync count.
+#[tauri::command]
+pub fn import_all_skills(state: tauri::State<'_, AppState>) -> Result<ImportResultInfo, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let importer = Importer::from_config(manager.config());
+
+    // Discover all importable skills
+    let discovered = importer.discover_importable_skills(manager.targets());
+
+    if discovered.is_empty() {
+        return Ok(ImportResultInfo {
+            imported: vec![],
+            skipped: vec![],
+            errors: vec![],
+            synced_to: 0,
+        });
+    }
+
+    // Import all with overwrite enabled
+    let mut result = talent_core::ImportResult {
+        imported: Vec::new(),
+        skipped: Vec::new(),
+        errors: Vec::new(),
+        synced_to: 0,
+    };
+
+    for skill in discovered {
+        match importer.import_skill(&skill.source_path, &skill.name, true) {
+            Ok(_) => result.imported.push(skill.name),
+            Err(e) => result.errors.push((skill.name, e.to_string())),
+        }
+    }
+
+    // Refresh skills to pick up newly imported ones
+    manager.refresh_skills().map_err(|e| e.to_string())?;
+
+    // Validate all skills
+    manager.validate_all();
+
+    // Sync to all targets (this creates symlinks where originals were removed)
+    let sync_results = manager.sync_all();
+    result.synced_to = sync_results.len();
+
+    Ok(ImportResultInfo {
+        imported: result.imported,
+        skipped: result.skipped,
+        errors: result.errors,
+        synced_to: result.synced_to,
+    })
+}
+
 /// Check if FileMerge (opendiff) is available
 #[tauri::command]
 pub fn is_filemerge_available() -> bool {

@@ -2,10 +2,9 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { ask } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill } from './lib/api';
-  import type { SkillInfo, TargetInfo, SyncResult, StatsInfo } from './lib/types';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills } from './lib/api';
+  import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
-  import ImportDialog from './lib/ImportDialog.svelte';
 
   // State using Svelte 5 runes
   let skills = $state<SkillInfo[]>([]);
@@ -22,8 +21,9 @@
   let newSkillName = $state('');
   let newSkillDescription = $state('');
 
-  // Import dialog
-  let showImportDialog = $state(false);
+  // Import state
+  let isImporting = $state(false);
+  let lastImportResult = $state<ImportResultInfo | null>(null);
 
   // Active tab
   let activeTab = $state<'skills' | 'targets'>('skills');
@@ -296,9 +296,22 @@
     }
   }
 
-  async function handleImportComplete() {
-    // Refresh skills list after import
-    await loadData();
+  async function handleImport() {
+    isImporting = true;
+    error = null;
+    lastImportResult = null;
+
+    try {
+      const result = await importAllSkills();
+      lastImportResult = result;
+
+      // Refresh skills list after import
+      await loadData();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      isImporting = false;
+    }
   }
 
   function getSyncSummary(result: SyncResult): string {
@@ -394,8 +407,8 @@
         <button onclick={handleSync} disabled={isSyncing || isLoading} class="primary">
           {isSyncing ? 'Syncing...' : 'Sync All'}
         </button>
-        <button class="ghost" onclick={() => showImportDialog = true}>
-          Import
+        <button class="ghost" onclick={handleImport} disabled={isImporting}>
+          {isImporting ? 'Importing...' : 'Import'}
         </button>
         <button class="ghost" onclick={() => showNewSkillForm = !showNewSkillForm}>
           {showNewSkillForm ? 'Cancel' : 'New'}
@@ -483,6 +496,44 @@
       </div>
     {/if}
 
+    {#if lastImportResult}
+      {@const hasErrors = lastImportResult.errors.length > 0}
+      {@const totalImported = lastImportResult.imported.length}
+      <div class="sync-results" class:has-errors={hasErrors}>
+        <div class="sync-results-header">
+          <div class="sync-results-title">
+            <span class="sync-icon">{hasErrors ? '⚠' : '✓'}</span>
+            <h3>Import {hasErrors ? 'Completed with Errors' : 'Complete'}</h3>
+          </div>
+          <div class="sync-results-summary">
+            {#if totalImported > 0}
+              <span class="sync-stat created">+{totalImported} imported</span>
+            {/if}
+            {#if lastImportResult.errors.length > 0}
+              <span class="sync-stat errors">✕ {lastImportResult.errors.length} errors</span>
+            {/if}
+            {#if totalImported === 0 && lastImportResult.errors.length === 0}
+              <span class="sync-stat unchanged">No skills to import</span>
+            {/if}
+          </div>
+          <button class="sync-dismiss" onclick={() => lastImportResult = null}>×</button>
+        </div>
+        {#if lastImportResult.errors.length > 0}
+          <div class="sync-targets">
+            <div class="sync-target has-errors">
+              <div class="sync-errors-list">
+                {#each lastImportResult.errors as [skillName, errorMsg]}
+                  <div class="sync-error-item">
+                    <strong>{skillName}</strong>: {errorMsg}
+                  </div>
+                {/each}
+              </div>
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     {#if isLoading}
       <div class="loading">Loading...</div>
     {:else if activeTab === 'skills'}
@@ -494,8 +545,8 @@
               <button class="primary" onclick={() => showNewSkillForm = true}>
                 + Create New Skill
               </button>
-              <button onclick={() => showImportDialog = true}>
-                Import Existing
+              <button onclick={handleImport} disabled={isImporting}>
+                {isImporting ? 'Importing...' : 'Import Existing'}
               </button>
             </div>
             <p class="hint">or scan Codex, Claude Code, Gemini, Cursor, Amp, Goose...</p>
@@ -583,12 +634,6 @@
       </div>
     {/if}
   </main>
-
-  <ImportDialog
-    open={showImportDialog}
-    onclose={() => showImportDialog = false}
-    onimported={handleImportComplete}
-  />
 
   {#if editingSkill}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
