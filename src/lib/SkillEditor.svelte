@@ -50,11 +50,11 @@
         EditorView.theme({
           '&': {
             height: '100%',
-            fontSize: '14px',
+            fontSize: '13px',
           },
           '.cm-scroller': {
             overflow: 'auto',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            fontFamily: 'ui-monospace, SF Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
           },
           '.cm-content': {
             padding: '12px 0',
@@ -63,8 +63,8 @@
             padding: '0 12px',
           },
           '.cm-gutters': {
-            backgroundColor: '#1e293b',
-            borderRight: '1px solid #334155',
+            backgroundColor: '#1c1c1e',
+            borderRight: '1px solid #38383a',
           },
         }),
       ],
@@ -111,8 +111,7 @@
   .editor-wrapper {
     height: 100%;
     width: 100%;
-    background-color: #0f172a;
-    border-radius: 8px;
+    background-color: #2c2c2e;
     overflow: hidden;
   }
 

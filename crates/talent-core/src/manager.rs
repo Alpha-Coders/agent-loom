@@ -10,6 +10,7 @@ use crate::syncer::{SyncResult, Syncer};
 use crate::target::Target;
 use crate::validator::Validator;
 use crate::watcher::{SkillEvent, SkillWatcher};
+use std::path::PathBuf;
 
 /// Main manager for Talent operations
 pub struct SkillManager {
@@ -47,8 +48,8 @@ impl SkillManager {
         // Discover skills
         let skills = discover_skills(&config.skills_dir)?;
 
-        // Detect targets
-        let targets = Target::detect_all();
+        // Detect targets and merge with config
+        let targets = Self::load_targets_with_config(&config);
 
         // Create watcher if auto-sync is enabled
         let watcher = if config.preferences.auto_sync {
@@ -106,7 +107,156 @@ impl SkillManager {
 
     /// Refresh the list of targets by re-detecting installed CLIs
     pub fn refresh_targets(&mut self) {
-        self.targets = Target::detect_all();
+        self.targets = Self::load_targets_with_config(&self.config);
+    }
+
+    /// Load targets, merging auto-detected with config settings
+    fn load_targets_with_config(config: &Config) -> Vec<Target> {
+        use crate::target::TargetKind;
+
+        let mut targets = Vec::new();
+
+        // First, add all auto-detected targets
+        for mut target in Target::detect_all() {
+            // Check if config has settings for this target
+            if let Some(target_config) = config.targets.get(target.id()) {
+                target.enabled = target_config.enabled;
+                // Override path if specified in config
+                if let Some(ref custom_path) = target_config.skills_path {
+                    target.skills_path = custom_path.clone();
+                }
+            }
+            targets.push(target);
+        }
+
+        // Then, add custom targets from config that weren't auto-detected
+        for (id, target_config) in &config.targets {
+            // Skip if already in the list
+            if targets.iter().any(|t| t.id() == id) {
+                continue;
+            }
+
+            // Only add if it has a custom path (otherwise it's just a disabled auto-detected one)
+            if let Some(ref custom_path) = target_config.skills_path {
+                // Try to parse the id as a known TargetKind, or treat as custom
+                if let Some(kind) = TargetKind::all().iter().find(|k| k.id() == id) {
+                    let mut target = Target::new(*kind, custom_path.clone());
+                    target.enabled = target_config.enabled;
+                    target.auto_detected = false;
+                    targets.push(target);
+                }
+                // Note: For truly custom targets (not in TargetKind), we'd need to extend the system
+            }
+        }
+
+        targets
+    }
+
+    /// Toggle a target's enabled state
+    pub fn toggle_target(&mut self, target_id: &str) -> Result<bool> {
+        // Find the target
+        let target = self
+            .targets
+            .iter_mut()
+            .find(|t| t.id() == target_id)
+            .ok_or_else(|| Error::TargetError(format!("Target not found: {}", target_id)))?;
+
+        // Toggle
+        target.enabled = !target.enabled;
+        let new_state = target.enabled;
+
+        // Update config and save
+        if target.enabled {
+            self.config.enable_target(target_id);
+        } else {
+            self.config.disable_target(target_id);
+        }
+        self.config.save()?;
+
+        Ok(new_state)
+    }
+
+    /// Set a target's enabled state explicitly
+    pub fn set_target_enabled(&mut self, target_id: &str, enabled: bool) -> Result<()> {
+        // Find the target
+        let target = self
+            .targets
+            .iter_mut()
+            .find(|t| t.id() == target_id)
+            .ok_or_else(|| Error::TargetError(format!("Target not found: {}", target_id)))?;
+
+        target.enabled = enabled;
+
+        // Update config and save
+        if enabled {
+            self.config.enable_target(target_id);
+        } else {
+            self.config.disable_target(target_id);
+        }
+        self.config.save()?;
+
+        Ok(())
+    }
+
+    /// Add a custom target with a specific path
+    pub fn add_custom_target(&mut self, target_id: &str, skills_path: PathBuf) -> Result<()> {
+        use crate::target::TargetKind;
+
+        // Validate the target_id is a known kind
+        let kind = TargetKind::all()
+            .iter()
+            .find(|k| k.id() == target_id)
+            .ok_or_else(|| Error::UnknownTargetType(target_id.to_string()))?;
+
+        // Check if target already exists
+        if self.targets.iter().any(|t| t.id() == target_id) {
+            return Err(Error::TargetAlreadyExists(target_id.to_string()));
+        }
+
+        // Create the target
+        let mut target = Target::new(*kind, skills_path.clone());
+        target.enabled = true;
+        target.auto_detected = false;
+
+        // Ensure the skills directory exists
+        target.ensure_skills_dir()?;
+
+        // Add to targets list
+        self.targets.push(target);
+
+        // Update config and save
+        let target_config = self.config.get_or_create_target(target_id);
+        target_config.enabled = true;
+        target_config.skills_path = Some(skills_path);
+        self.config.save()?;
+
+        Ok(())
+    }
+
+    /// Remove a custom target (only works for non-auto-detected targets)
+    pub fn remove_custom_target(&mut self, target_id: &str) -> Result<()> {
+        // Find the target
+        let target = self
+            .targets
+            .iter()
+            .find(|t| t.id() == target_id)
+            .ok_or_else(|| Error::TargetError(format!("Target not found: {}", target_id)))?;
+
+        // Only allow removing non-auto-detected targets
+        if target.auto_detected {
+            return Err(Error::TargetError(
+                "Cannot remove auto-detected target. Use disable instead.".to_string(),
+            ));
+        }
+
+        // Remove from targets list
+        self.targets.retain(|t| t.id() != target_id);
+
+        // Remove from config and save
+        self.config.targets.remove(target_id);
+        self.config.save()?;
+
+        Ok(())
     }
 
     /// Validate a specific skill by name

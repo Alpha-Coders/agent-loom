@@ -165,6 +165,12 @@ pub fn run() {
             commands::import_all_skills,
             commands::is_filemerge_available,
             commands::launch_filemerge,
+            // Target management
+            commands::toggle_target,
+            commands::set_target_enabled,
+            commands::add_custom_target,
+            commands::remove_custom_target,
+            commands::get_available_target_types,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
