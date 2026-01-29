@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Known target CLI tools
+/// See https://agentskills.io for the full list of compatible agents
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TargetKind {
@@ -19,10 +20,22 @@ pub enum TargetKind {
     Gemini,
     /// Cursor IDE
     Cursor,
-    /// Amp CLI
+    /// Amp CLI (Sourcegraph)
     Amp,
-    /// Goose CLI
+    /// Goose CLI (Block)
     Goose,
+    /// Roo Code
+    RooCode,
+    /// OpenCode
+    OpenCode,
+    /// Vibe (Mistral AI)
+    Vibe,
+    /// Firebender
+    Firebender,
+    /// Mux (Coder)
+    Mux,
+    /// Autohand Code CLI
+    Autohand,
 }
 
 impl TargetKind {
@@ -35,6 +48,12 @@ impl TargetKind {
             TargetKind::Cursor,
             TargetKind::Amp,
             TargetKind::Goose,
+            TargetKind::RooCode,
+            TargetKind::OpenCode,
+            TargetKind::Vibe,
+            TargetKind::Firebender,
+            TargetKind::Mux,
+            TargetKind::Autohand,
         ]
     }
 
@@ -47,6 +66,12 @@ impl TargetKind {
             TargetKind::Cursor => "Cursor",
             TargetKind::Amp => "Amp",
             TargetKind::Goose => "Goose",
+            TargetKind::RooCode => "Roo Code",
+            TargetKind::OpenCode => "OpenCode",
+            TargetKind::Vibe => "Vibe",
+            TargetKind::Firebender => "Firebender",
+            TargetKind::Mux => "Mux",
+            TargetKind::Autohand => "Autohand",
         }
     }
 
@@ -59,6 +84,12 @@ impl TargetKind {
             TargetKind::Cursor => "cursor",
             TargetKind::Amp => "amp",
             TargetKind::Goose => "goose",
+            TargetKind::RooCode => "roo-code",
+            TargetKind::OpenCode => "opencode",
+            TargetKind::Vibe => "vibe",
+            TargetKind::Firebender => "firebender",
+            TargetKind::Mux => "mux",
+            TargetKind::Autohand => "autohand",
         }
     }
 
@@ -71,18 +102,22 @@ impl TargetKind {
             TargetKind::Cursor => ".cursor",
             TargetKind::Amp => ".amp",
             TargetKind::Goose => ".goose",
+            TargetKind::RooCode => ".roo-code",
+            TargetKind::OpenCode => ".opencode",
+            TargetKind::Vibe => ".vibe",
+            TargetKind::Firebender => ".firebender",
+            TargetKind::Mux => ".mux",
+            TargetKind::Autohand => ".autohand",
         }
     }
 
     /// Get the skills subdirectory name within the config dir
     fn skills_subdir(&self) -> &'static str {
         match self {
+            // Claude Code uses "commands" instead of "skills"
             TargetKind::ClaudeCode => "commands",
-            TargetKind::Codex => "skills",
-            TargetKind::Gemini => "skills",
-            TargetKind::Cursor => "skills",
-            TargetKind::Amp => "skills",
-            TargetKind::Goose => "skills",
+            // All others use "skills" per agentskills.io convention
+            _ => "skills",
         }
     }
 }
@@ -236,7 +271,13 @@ mod tests {
         assert!(all.contains(&TargetKind::Cursor));
         assert!(all.contains(&TargetKind::Amp));
         assert!(all.contains(&TargetKind::Goose));
-        assert_eq!(all.len(), 6);
+        assert!(all.contains(&TargetKind::RooCode));
+        assert!(all.contains(&TargetKind::OpenCode));
+        assert!(all.contains(&TargetKind::Vibe));
+        assert!(all.contains(&TargetKind::Firebender));
+        assert!(all.contains(&TargetKind::Mux));
+        assert!(all.contains(&TargetKind::Autohand));
+        assert_eq!(all.len(), 12);
     }
 
     #[test]

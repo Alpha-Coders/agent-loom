@@ -210,6 +210,9 @@ impl Importer {
     }
 
     /// Import a single skill
+    ///
+    /// Copies the skill to Talent's central storage and removes the source
+    /// directory so that sync can create a symlink in its place.
     pub fn import_skill(&self, source: &Path, name: &str, overwrite: bool) -> Result<PathBuf> {
         let dest = self.skills_dir.join(name);
 
@@ -226,6 +229,18 @@ impl Importer {
 
         // Copy the entire directory recursively
         copy_dir_recursive(source, &dest)?;
+
+        // Remove the source directory so sync can create a symlink
+        // Only do this if source is different from dest (not importing from Talent itself)
+        if source != dest && source.exists() {
+            if let Err(e) = fs::remove_dir_all(source) {
+                // Log but don't fail - the import succeeded, cleanup is best-effort
+                eprintln!(
+                    "Warning: Could not remove source directory {:?}: {}",
+                    source, e
+                );
+            }
+        }
 
         Ok(dest)
     }
@@ -409,7 +424,7 @@ description: {description}
     }
 
     #[test]
-    fn import_copies_skill_directory() {
+    fn import_copies_skill_directory_and_removes_source() {
         let temp = TempDir::new().unwrap();
         let source_dir = temp.path().join("source");
         let talent_skills = temp.path().join("talent_skills");
@@ -422,9 +437,13 @@ description: {description}
 
         assert!(result.is_ok());
 
+        // Skill should be copied to talent directory
         let imported_path = talent_skills.join("imported-skill");
         assert!(imported_path.exists());
         assert!(imported_path.join(SKILL_FILE_NAME).exists());
+
+        // Source directory should be removed
+        assert!(!source_dir.exists());
     }
 
     #[test]

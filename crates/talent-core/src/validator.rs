@@ -1,12 +1,20 @@
 //! Validation engine for skills
 //!
-//! Validates skills against agentskills.io rules:
-//! - Required frontmatter fields (name, description)
-//! - Name format (kebab-case)
-//! - Content presence
+//! Validates skills against agentskills.io specification:
+//! - name: 1-64 chars, lowercase alphanumeric + hyphens, no leading/trailing/consecutive hyphens
+//! - description: 1-1024 chars
+//! - Content presence (optional)
+//!
+//! See https://agentskills.io/specification for full spec.
 
 use crate::error::{Error, Result};
 use crate::skill::{Skill, ValidationStatus};
+
+/// Maximum length for skill name (per agentskills.io spec)
+const MAX_NAME_LENGTH: usize = 64;
+
+/// Maximum length for skill description (per agentskills.io spec)
+const MAX_DESCRIPTION_LENGTH: usize = 1024;
 
 /// Validator for skills
 pub struct Validator {
@@ -35,17 +43,32 @@ impl Validator {
         // Check required fields
         if skill.meta.name.is_empty() {
             errors.push("name is required".to_string());
+        } else {
+            // Validate name length (max 64 chars)
+            if skill.meta.name.len() > MAX_NAME_LENGTH {
+                errors.push(format!(
+                    "name exceeds {} characters (has {})",
+                    MAX_NAME_LENGTH,
+                    skill.meta.name.len()
+                ));
+            }
+
+            // Validate name format (kebab-case)
+            if !is_kebab_case(&skill.meta.name) {
+                errors.push(format!(
+                    "name '{}' must be kebab-case (lowercase letters, numbers, hyphens; no leading/trailing/consecutive hyphens)",
+                    skill.meta.name
+                ));
+            }
         }
 
         if skill.meta.description.is_empty() {
             errors.push("description is required".to_string());
-        }
-
-        // Validate name format (kebab-case)
-        if !skill.meta.name.is_empty() && !is_kebab_case(&skill.meta.name) {
+        } else if skill.meta.description.len() > MAX_DESCRIPTION_LENGTH {
             errors.push(format!(
-                "name '{}' should be kebab-case (lowercase with hyphens)",
-                skill.meta.name
+                "description exceeds {} characters (has {})",
+                MAX_DESCRIPTION_LENGTH,
+                skill.meta.description.len()
             ));
         }
 
