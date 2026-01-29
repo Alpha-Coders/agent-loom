@@ -69,13 +69,13 @@ Filename: plans/20260129-talent-implementation.md
 ### Phase 4-6: Future (Editor, Import/Export, Polish)
 
 14. [x] Add CodeMirror 6 editor for skill editing
-15. [ ] Implement skill import functionality (see Design: Skill Import Feature below)
-    - 15.1 [ ] Add importer module to talent-core (`crates/talent-core/src/importer.rs`)
-    - 15.2 [ ] Add Tauri commands for import (`discover_importable_skills`, `import_skills`, `check_filemerge_available`, `open_filemerge`)
-    - 15.3 [ ] Create ImportDialog.svelte component
-    - 15.4 [ ] Update empty state in SkillList.svelte with import option
-    - 15.5 [ ] Add Import button to toolbar
-    - 15.6 [ ] Write tests for importer module
+15. [x] Implement skill import functionality (see Design: Skill Import Feature below)
+    - 15.1 [x] Add importer module to talent-core (`crates/talent-core/src/importer.rs`)
+    - 15.2 [x] Add Tauri commands for import (`discover_importable_skills`, `import_skills`, `check_filemerge_available`, `open_filemerge`)
+    - 15.3 [x] Create ImportDialog.svelte component
+    - 15.4 [x] Update empty state in App.svelte with import option
+    - 15.5 [x] Add Import button to toolbar
+    - 15.6 [x] Write tests for importer module
 16. [ ] Polish UI and add system tray support
 
 ## Design: Skill Import Feature
@@ -276,7 +276,7 @@ pub struct ImportResult {
 ## Implementation State
 
 - State: in-progress
-- Current step: 15 - Implement skill import/export functionality
+- Current step: 16 - Polish UI and add system tray support
 - Last updated: 2026-01-29
 - Checkpoints:
   - 2026-01-29 not-started Initial plan created
@@ -286,6 +286,7 @@ pub struct ImportResult {
   - 2026-01-29 in-progress Step 10 completed (CLI implementation). All 56 tests passing. CLI commands: list, sync, doctor, targets, create, validate.
   - 2026-01-29 in-progress Steps 11-13 completed (Tauri backend, Svelte frontend, app verification). MVP complete. All 56 tests passing.
   - 2026-01-29 in-progress Step 14 completed (CodeMirror 6 editor). All 58 tests passing. Skill editing with live preview.
+  - 2026-01-29 in-progress Step 15 completed (skill import functionality). All 67 tests passing. Import dialog with conflict resolution and FileMerge integration.
 
 ## Status Updates
 
@@ -296,6 +297,7 @@ pub struct ImportResult {
 - 2026-01-29 in-progress Completed batch 4: CLI implementation with clap 4 - subcommands for list, sync, doctor, targets, create, validate. JSON output support. All 56 tests passing.
 - 2026-01-29 in-progress Completed batch 5: Tauri v2 backend with 9 commands (get_skills, get_targets, sync_all, create_skill, validate_skill, validate_all, refresh_skills, delete_skill, get_stats). Svelte 5 frontend with responsive skill list and target list UI. App runs successfully. All 56 tests passing.
 - 2026-01-29 in-progress Completed batch 6: CodeMirror 6 editor integration. Added get_skill_content and save_skill_content Tauri commands. Created SkillEditor Svelte component with markdown highlighting and dark theme. Split-panel UI with unsaved changes indicator. All 58 tests passing.
+- 2026-01-29 in-progress Completed batch 7: Skill import functionality. Added importer module with discovery engine, conflict detection, and FileMerge integration. Created ImportDialog component with checkbox selection and conflict resolution dropdowns. Updated App.svelte with Import button in toolbar and enhanced empty state. All 67 tests passing (9 new importer tests).
 
 ## Dependencies
 
