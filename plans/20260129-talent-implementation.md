@@ -37,9 +37,9 @@ Filename: plans/20260129-talent-implementation.md
 
 ### Phase 1: Project Setup & Core Backend
 
-1. [ ] Install Rust and initialize workspace with `talent-core` and `talent-cli` crates
-2. [ ] Implement error types (`crates/talent-core/src/error.rs`)
-3. [ ] Implement config module with serialization (`crates/talent-core/src/config.rs`)
+1. [x] Install Rust and initialize workspace with `talent-core` and `talent-cli` crates
+2. [x] Implement error types (`crates/talent-core/src/error.rs`)
+3. [x] Implement config module with serialization (`crates/talent-core/src/config.rs`)
 4. [ ] Implement skill model with frontmatter parsing (`crates/talent-core/src/skill.rs`)
 5. [ ] Implement target model with auto-detection (`crates/talent-core/src/target.rs`)
 6. [ ] Implement validation engine (`crates/talent-core/src/validator.rs`)
@@ -65,15 +65,17 @@ Filename: plans/20260129-talent-implementation.md
 
 ## Implementation State
 
-- State: not-started
-- Current step: 1 - Install Rust and initialize workspace
+- State: in-progress
+- Current step: 4 - Implement skill model
 - Last updated: 2026-01-29
 - Checkpoints:
   - 2026-01-29 not-started Initial plan created
+  - 2026-01-29 in-progress Steps 1-3 completed (workspace setup, error types, config)
 
 ## Status Updates
 
 - 2026-01-29 not-started Plan migrated to template format
+- 2026-01-29 in-progress Completed batch 1: Rust workspace initialized, error types implemented with thiserror, config module with TOML serialization. All 9 tests passing.
 
 ## Dependencies
 
