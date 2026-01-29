@@ -2,7 +2,9 @@
 //!
 //! Validates skills against agentskills.io specification:
 //! - name: 1-64 chars, lowercase alphanumeric + hyphens, no leading/trailing/consecutive hyphens
+//! - name must match parent directory name
 //! - description: 1-1024 chars
+//! - compatibility: max 500 chars (if provided)
 //! - Content presence (optional)
 //!
 //! See https://agentskills.io/specification for full spec.
@@ -15,6 +17,9 @@ const MAX_NAME_LENGTH: usize = 64;
 
 /// Maximum length for skill description (per agentskills.io spec)
 const MAX_DESCRIPTION_LENGTH: usize = 1024;
+
+/// Maximum length for compatibility field (per agentskills.io spec)
+const MAX_COMPATIBILITY_LENGTH: usize = 500;
 
 /// Validator for skills
 pub struct Validator {
@@ -60,6 +65,15 @@ impl Validator {
                     skill.meta.name
                 ));
             }
+
+            // Validate name matches parent directory (per agentskills.io spec)
+            let folder_name = skill.folder_name();
+            if folder_name != skill.meta.name {
+                errors.push(format!(
+                    "name '{}' must match parent directory '{}' (per agentskills.io spec)",
+                    skill.meta.name, folder_name
+                ));
+            }
         }
 
         if skill.meta.description.is_empty() {
@@ -70,6 +84,17 @@ impl Validator {
                 MAX_DESCRIPTION_LENGTH,
                 skill.meta.description.len()
             ));
+        }
+
+        // Validate optional compatibility field (max 500 chars per spec)
+        if let Some(ref compat) = skill.meta.compatibility {
+            if compat.len() > MAX_COMPATIBILITY_LENGTH {
+                errors.push(format!(
+                    "compatibility exceeds {} characters (has {})",
+                    MAX_COMPATIBILITY_LENGTH,
+                    compat.len()
+                ));
+            }
         }
 
         // Check content presence
@@ -138,17 +163,59 @@ mod tests {
     use crate::skill::SkillMeta;
     use std::path::PathBuf;
 
+    /// Create a test skill with matching folder name (valid by default)
     fn create_test_skill(name: &str, description: &str, content: &str) -> Skill {
+        // Path ends with the skill name so folder_name() matches meta.name
         Skill {
             meta: SkillMeta {
                 name: name.to_string(),
                 description: description.to_string(),
-                tags: Vec::new(),
-                version: None,
-                author: None,
+                ..Default::default()
             },
             content: content.to_string(),
-            path: PathBuf::from("/test"),
+            path: PathBuf::from(format!("/test/skills/{}", name)),
+            validation_status: ValidationStatus::Unknown,
+            validation_errors: Vec::new(),
+        }
+    }
+
+    /// Create a test skill with mismatched folder name
+    fn create_test_skill_with_path(
+        name: &str,
+        description: &str,
+        content: &str,
+        path: &str,
+    ) -> Skill {
+        Skill {
+            meta: SkillMeta {
+                name: name.to_string(),
+                description: description.to_string(),
+                ..Default::default()
+            },
+            content: content.to_string(),
+            path: PathBuf::from(path),
+            validation_status: ValidationStatus::Unknown,
+            validation_errors: Vec::new(),
+        }
+    }
+
+    /// Create a test skill with compatibility field
+    fn create_test_skill_with_compatibility(
+        name: &str,
+        description: &str,
+        content: &str,
+        compatibility: Option<&str>,
+    ) -> Skill {
+        let mut meta = SkillMeta {
+            name: name.to_string(),
+            description: description.to_string(),
+            ..Default::default()
+        };
+        meta.compatibility = compatibility.map(String::from);
+        Skill {
+            meta,
+            content: content.to_string(),
+            path: PathBuf::from(format!("/test/skills/{}", name)),
             validation_status: ValidationStatus::Unknown,
             validation_errors: Vec::new(),
         }
@@ -296,5 +363,83 @@ mod tests {
         assert!(!is_kebab_case("invalid-"));
         assert!(!is_kebab_case("in--valid"));
         assert!(!is_kebab_case("1invalid")); // Starts with digit
+    }
+
+    #[test]
+    fn name_must_match_directory() {
+        let validator = Validator::new();
+
+        // Skill with mismatched folder name
+        let mut skill =
+            create_test_skill_with_path("my-skill", "Desc", "Content", "/test/skills/wrong-folder");
+
+        let result = validator.validate(&mut skill);
+        assert!(result.is_err());
+        assert_eq!(skill.validation_status, ValidationStatus::Invalid);
+        assert!(skill
+            .validation_errors
+            .iter()
+            .any(|e| e.contains("must match parent directory")));
+    }
+
+    #[test]
+    fn matching_name_and_directory_passes() {
+        let validator = Validator::new();
+
+        // Skill with matching folder name
+        let mut skill =
+            create_test_skill_with_path("my-skill", "Desc", "Content", "/test/skills/my-skill");
+
+        let result = validator.validate(&mut skill);
+        assert!(result.is_ok());
+        assert_eq!(skill.validation_status, ValidationStatus::Valid);
+    }
+
+    #[test]
+    fn compatibility_field_max_length() {
+        let validator = Validator::new();
+
+        // Valid compatibility (under 500 chars)
+        let mut skill = create_test_skill_with_compatibility(
+            "my-skill",
+            "Desc",
+            "Content",
+            Some("Requires git, docker, and network access"),
+        );
+        assert!(validator.validate(&mut skill).is_ok());
+
+        // Invalid compatibility (over 500 chars)
+        let long_compat = "a".repeat(501);
+        let mut skill =
+            create_test_skill_with_compatibility("my-skill", "Desc", "Content", Some(&long_compat));
+
+        let result = validator.validate(&mut skill);
+        assert!(result.is_err());
+        assert!(skill
+            .validation_errors
+            .iter()
+            .any(|e| e.contains("compatibility exceeds")));
+    }
+
+    #[test]
+    fn compatibility_at_exactly_500_chars_passes() {
+        let validator = Validator::new();
+
+        let compat_500 = "a".repeat(500);
+        let mut skill =
+            create_test_skill_with_compatibility("my-skill", "Desc", "Content", Some(&compat_500));
+
+        let result = validator.validate(&mut skill);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn no_compatibility_field_passes() {
+        let validator = Validator::new();
+
+        let mut skill = create_test_skill_with_compatibility("my-skill", "Desc", "Content", None);
+
+        let result = validator.validate(&mut skill);
+        assert!(result.is_ok());
     }
 }
