@@ -8,12 +8,18 @@
 
 pub mod config;
 pub mod error;
+pub mod manager;
 pub mod skill;
+pub mod syncer;
 pub mod target;
 pub mod validator;
+pub mod watcher;
 
 pub use config::Config;
 pub use error::{Error, Result};
+pub use manager::{ManagerStats, SkillManager};
 pub use skill::{discover_skills, Skill, SkillMeta, ValidationStatus, SKILL_FILE_NAME};
+pub use syncer::{SyncError, SyncResult, Syncer};
 pub use target::{Target, TargetInfo, TargetKind};
 pub use validator::Validator;
+pub use watcher::{SkillEvent, SkillWatcher};
