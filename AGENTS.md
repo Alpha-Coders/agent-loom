@@ -104,6 +104,15 @@ grep -r "Reflection Loop" agents/reference/
 - Custom commit scripts -> Use instead of `/commit`
 - Custom PR scripts -> Use instead of `/commit-push-pr`
 
+## Git Workflow
+
+**Push directly to main. Do not create pull requests.**
+
+When asked to commit and push:
+1. Commit changes on the current branch (main)
+2. Push directly to `origin main`
+3. Do NOT create feature branches or PRs
+
 ### Installing Plugins
 
 ```bash
