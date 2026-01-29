@@ -6,8 +6,9 @@
 mod commands;
 
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Mutex;
-use talent_core::{SkillManager, ValidationStatus};
+use talent_core::{ConflictResolution, SkillManager, TargetKind, ValidationStatus};
 
 /// Skill information for the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +53,68 @@ pub struct StatsInfo {
     pub is_watching: bool,
 }
 
+/// Discovered skill for import UI
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveredSkillInfo {
+    pub name: String,
+    pub description: String,
+    pub source_path: String,
+    pub source_target: String,
+    pub has_conflict: bool,
+    pub existing_description: Option<String>,
+}
+
+impl From<&talent_core::DiscoveredSkill> for DiscoveredSkillInfo {
+    fn from(skill: &talent_core::DiscoveredSkill) -> Self {
+        Self {
+            name: skill.name.clone(),
+            description: skill.description.clone(),
+            source_path: skill.source_path.display().to_string(),
+            source_target: match skill.source_target {
+                TargetKind::ClaudeCode => "Claude Code".to_string(),
+                TargetKind::Codex => "Codex".to_string(),
+                TargetKind::Gemini => "Gemini".to_string(),
+                TargetKind::Cursor => "Cursor".to_string(),
+                TargetKind::Amp => "Amp".to_string(),
+                TargetKind::Goose => "Goose".to_string(),
+            },
+            has_conflict: skill.conflict.is_some(),
+            existing_description: skill.conflict.as_ref().map(|c| c.existing_description.clone()),
+        }
+    }
+}
+
+/// Import selection from frontend
+#[derive(Debug, Clone, Deserialize)]
+pub struct ImportSelectionInfo {
+    pub name: String,
+    pub source_path: String,
+    pub resolution: String,
+}
+
+impl ImportSelectionInfo {
+    pub fn to_core(&self) -> talent_core::ImportSelection {
+        talent_core::ImportSelection {
+            name: self.name.clone(),
+            source_path: PathBuf::from(&self.source_path),
+            resolution: match self.resolution.as_str() {
+                "skip" => ConflictResolution::Skip,
+                "overwrite" => ConflictResolution::Overwrite,
+                _ => ConflictResolution::Import,
+            },
+        }
+    }
+}
+
+/// Import result for frontend
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportResultInfo {
+    pub imported: Vec<String>,
+    pub skipped: Vec<String>,
+    pub errors: Vec<(String, String)>,
+    pub synced_to: usize,
+}
+
 /// Application state shared across commands
 pub struct AppState {
     pub manager: Mutex<SkillManager>,
@@ -80,6 +143,10 @@ pub fn run() {
             commands::get_stats,
             commands::get_skill_content,
             commands::save_skill_content,
+            commands::discover_importable_skills,
+            commands::import_skills,
+            commands::is_filemerge_available,
+            commands::launch_filemerge,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

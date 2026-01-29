@@ -1,7 +1,8 @@
 //! Tauri commands for the frontend
 
-use crate::{AppState, SkillInfo, StatsInfo};
-use talent_core::{SyncResult, TargetInfo};
+use crate::{AppState, DiscoveredSkillInfo, ImportResultInfo, ImportSelectionInfo, SkillInfo, StatsInfo};
+use std::path::PathBuf;
+use talent_core::{check_filemerge_available, open_filemerge, Importer, SyncResult, TargetInfo};
 
 /// Get all skills
 #[tauri::command]
@@ -113,4 +114,64 @@ pub fn save_skill_content(
         .get_skill(&name)
         .ok_or_else(|| format!("Skill not found: {name}"))?;
     Ok(SkillInfo::from(skill))
+}
+
+/// Discover importable skills from all target CLIs
+#[tauri::command]
+pub fn discover_importable_skills(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<DiscoveredSkillInfo>, String> {
+    let manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let importer = Importer::from_config(manager.config());
+    let discovered = importer.discover_importable_skills(manager.targets());
+
+    Ok(discovered.iter().map(DiscoveredSkillInfo::from).collect())
+}
+
+/// Import selected skills
+#[tauri::command]
+pub fn import_skills(
+    state: tauri::State<'_, AppState>,
+    selections: Vec<ImportSelectionInfo>,
+) -> Result<ImportResultInfo, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let importer = Importer::from_config(manager.config());
+
+    // Convert frontend selections to core types
+    let core_selections: Vec<_> = selections.iter().map(|s| s.to_core()).collect();
+
+    // Import the skills
+    let mut result = importer.import_selections(&core_selections);
+
+    // Refresh skills to pick up newly imported ones
+    manager.refresh_skills().map_err(|e| e.to_string())?;
+
+    // Validate all skills
+    manager.validate_all();
+
+    // Sync to all targets
+    let sync_results = manager.sync_all();
+    result.synced_to = sync_results.len();
+
+    Ok(ImportResultInfo {
+        imported: result.imported,
+        skipped: result.skipped,
+        errors: result.errors,
+        synced_to: result.synced_to,
+    })
+}
+
+/// Check if FileMerge (opendiff) is available
+#[tauri::command]
+pub fn is_filemerge_available() -> bool {
+    check_filemerge_available()
+}
+
+/// Open FileMerge to compare two skill directories
+#[tauri::command]
+pub fn launch_filemerge(existing: String, incoming: String) -> Result<(), String> {
+    let existing_path = PathBuf::from(existing);
+    let incoming_path = PathBuf::from(incoming);
+
+    open_filemerge(&existing_path, &incoming_path).map_err(|e| e.to_string())
 }

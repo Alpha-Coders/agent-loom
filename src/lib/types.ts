@@ -42,3 +42,25 @@ export interface StatsInfo {
   enabled_targets: number;
   is_watching: boolean;
 }
+
+export interface DiscoveredSkillInfo {
+  name: string;
+  description: string;
+  source_path: string;
+  source_target: string;
+  has_conflict: boolean;
+  existing_description: string | null;
+}
+
+export interface ImportSelectionInfo {
+  name: string;
+  source_path: string;
+  resolution: 'import' | 'skip' | 'overwrite';
+}
+
+export interface ImportResultInfo {
+  imported: string[];
+  skipped: string[];
+  errors: [string, string][];
+  synced_to: number;
+}

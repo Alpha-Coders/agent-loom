@@ -1,7 +1,7 @@
 // API wrapper for Tauri commands
 
 import { invoke } from '@tauri-apps/api/core';
-import type { SkillInfo, TargetInfo, SyncResult, StatsInfo } from './types';
+import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, DiscoveredSkillInfo, ImportSelectionInfo, ImportResultInfo } from './types';
 
 export async function getSkills(): Promise<SkillInfo[]> {
   return invoke<SkillInfo[]>('get_skills');
@@ -45,4 +45,20 @@ export async function getSkillContent(name: string): Promise<string> {
 
 export async function saveSkillContent(name: string, content: string): Promise<SkillInfo> {
   return invoke<SkillInfo>('save_skill_content', { name, content });
+}
+
+export async function discoverImportableSkills(): Promise<DiscoveredSkillInfo[]> {
+  return invoke<DiscoveredSkillInfo[]>('discover_importable_skills');
+}
+
+export async function importSkills(selections: ImportSelectionInfo[]): Promise<ImportResultInfo> {
+  return invoke<ImportResultInfo>('import_skills', { selections });
+}
+
+export async function isFileMergeAvailable(): Promise<boolean> {
+  return invoke<boolean>('is_filemerge_available');
+}
+
+export async function launchFileMerge(existing: string, incoming: string): Promise<void> {
+  return invoke<void>('launch_filemerge', { existing, incoming });
 }

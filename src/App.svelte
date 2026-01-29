@@ -3,6 +3,7 @@
   import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, getStats, getSkillContent, saveSkillContent, validateSkill } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
+  import ImportDialog from './lib/ImportDialog.svelte';
 
   // State using Svelte 5 runes
   let skills = $state<SkillInfo[]>([]);
@@ -18,6 +19,9 @@
   let showNewSkillForm = $state(false);
   let newSkillName = $state('');
   let newSkillDescription = $state('');
+
+  // Import dialog
+  let showImportDialog = $state(false);
 
   // Active tab
   let activeTab = $state<'skills' | 'targets'>('skills');
@@ -186,6 +190,11 @@
     }
   }
 
+  async function handleImportComplete() {
+    // Refresh skills list after import
+    await loadData();
+  }
+
   function getSyncSummary(result: SyncResult): string {
     const parts = [];
     if (result.created.length > 0) parts.push(`+${result.created.length}`);
@@ -259,6 +268,9 @@
         <button onclick={handleSync} disabled={isSyncing || isLoading} class="primary">
           {isSyncing ? 'Syncing...' : 'Sync All'}
         </button>
+        <button onclick={() => showImportDialog = true}>
+          Import
+        </button>
         <button onclick={() => showNewSkillForm = !showNewSkillForm}>
           {showNewSkillForm ? 'Cancel' : 'New Skill'}
         </button>
@@ -307,7 +319,15 @@
         {#if skills.length === 0}
           <div class="empty-state">
             <p>No skills found</p>
-            <p class="hint">Create your first skill to get started</p>
+            <div class="empty-actions">
+              <button class="primary" onclick={() => showNewSkillForm = true}>
+                + Create New Skill
+              </button>
+              <button onclick={() => showImportDialog = true}>
+                Import Existing
+              </button>
+            </div>
+            <p class="hint">or scan Codex, Claude Code, Gemini, Cursor, Amp, Goose...</p>
           </div>
         {:else}
           {#each skills as skill}
@@ -392,6 +412,12 @@
       </div>
     {/if}
   </main>
+
+  <ImportDialog
+    open={showImportDialog}
+    onclose={() => showImportDialog = false}
+    onimported={handleImportComplete}
+  />
 
   {#if editingSkill}
     <aside class="editor-panel">
@@ -697,6 +723,13 @@
     margin-top: 0.5rem;
     color: var(--color-text-muted);
     font-size: 0.8rem;
+  }
+
+  .empty-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 1rem;
   }
 
   .skill-list, .target-list {
