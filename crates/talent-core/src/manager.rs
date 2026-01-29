@@ -159,21 +159,19 @@ impl SkillManager {
         Some(self.syncer.sync_target(target, &skills_to_sync))
     }
 
-    /// Create a new skill
+    /// Create a new skill (name is automatically converted to kebab-case)
     pub fn create_skill(&mut self, name: &str, description: &str) -> Result<&Skill> {
-        // Validate name format
-        if !crate::skill::is_valid_skill_name(name) {
-            return Err(Error::InvalidSkillName(name.to_string()));
-        }
+        // Normalize name to kebab-case
+        let normalized_name = crate::skill::to_kebab_case(name);
 
         // Check if skill already exists
-        let skill_path = self.config.skills_dir.join(name);
+        let skill_path = self.config.skills_dir.join(&normalized_name);
         if skill_path.exists() {
-            return Err(Error::SkillAlreadyExists(name.to_string()));
+            return Err(Error::SkillAlreadyExists(normalized_name));
         }
 
-        // Create the skill
-        let skill = Skill::create(&self.config.skills_dir, name, description)?;
+        // Create the skill with normalized name
+        let skill = Skill::create(&self.config.skills_dir, &normalized_name, description)?;
         self.skills.push(skill);
 
         // Return a reference to the newly created skill
@@ -325,13 +323,66 @@ impl SkillManager {
     }
 
     /// Save content to a skill's SKILL.md file
-    pub fn save_skill_content(&mut self, name: &str, content: &str) -> Result<()> {
+    /// Save skill content and auto-rename folder if frontmatter name changed
+    ///
+    /// Returns the (possibly new) skill name after save
+    pub fn save_skill_content(&mut self, name: &str, content: &str) -> Result<String> {
+        // Extract the name from frontmatter to check if it changed
+        let new_name = Self::extract_name_from_content(content);
+
+        // If name changed in frontmatter, rename the skill first
+        if let Some(ref new_name) = new_name {
+            if new_name != name {
+                // Rename will update the folder and symlinks
+                self.rename_skill(name, new_name)?;
+
+                // Now save content to the renamed skill
+                let skill_path = self.config.skills_dir.join(new_name);
+                let skill = self
+                    .get_skill_mut(new_name)
+                    .ok_or_else(|| Error::SkillNotFound(skill_path))?;
+                skill.save_content(content)?;
+
+                return Ok(new_name.clone());
+            }
+        }
+
+        // No rename needed, just save
         let skill_path = self.config.skills_dir.join(name);
         let skill = self
             .get_skill_mut(name)
             .ok_or_else(|| Error::SkillNotFound(skill_path))?;
 
-        skill.save_content(content)
+        skill.save_content(content)?;
+        Ok(name.to_string())
+    }
+
+    /// Extract the name field from YAML frontmatter and normalize to kebab-case
+    fn extract_name_from_content(content: &str) -> Option<String> {
+        let trimmed = content.trim_start();
+        if !trimmed.starts_with("---") {
+            return None;
+        }
+
+        let after_first = &trimmed[3..];
+        let end_idx = after_first.find("\n---")?;
+        let yaml_content = &after_first[..end_idx];
+
+        // Simple regex-free extraction of name field
+        for line in yaml_content.lines() {
+            let line = line.trim();
+            if line.starts_with("name:") {
+                let value = line.strip_prefix("name:")?.trim();
+                // Remove quotes if present
+                let value = value.trim_matches('"').trim_matches('\'');
+                if !value.is_empty() {
+                    // Normalize to kebab-case
+                    return Some(crate::skill::to_kebab_case(value));
+                }
+            }
+        }
+
+        None
     }
 
     /// Get summary statistics

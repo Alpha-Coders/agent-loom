@@ -114,13 +114,16 @@ pub fn save_skill_content(
     content: String,
 ) -> Result<SkillInfo, String> {
     let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
-    manager
+
+    // save_skill_content now returns the (possibly new) skill name
+    // if the frontmatter name changed, the folder was automatically renamed
+    let final_name = manager
         .save_skill_content(&name, &content)
         .map_err(|e| e.to_string())?;
 
     let skill = manager
-        .get_skill(&name)
-        .ok_or_else(|| format!("Skill not found: {name}"))?;
+        .get_skill(&final_name)
+        .ok_or_else(|| format!("Skill not found: {final_name}"))?;
     Ok(SkillInfo::from(skill))
 }
 

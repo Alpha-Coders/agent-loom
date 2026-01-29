@@ -61,6 +61,59 @@ pub fn is_valid_skill_name(name: &str) -> bool {
     true
 }
 
+/// Convert any string to valid kebab-case
+///
+/// Examples:
+/// - "Test Skill" -> "test-skill"
+/// - "TEST" -> "test"
+/// - "My_Cool_Skill" -> "my-cool-skill"
+/// - "hello world 123" -> "hello-world-123"
+/// - "  Multiple   Spaces  " -> "multiple-spaces"
+pub fn to_kebab_case(input: &str) -> String {
+    let mut result = String::new();
+    let mut prev_was_separator = true; // Start true to skip leading separators
+
+    for c in input.chars() {
+        if c.is_ascii_alphanumeric() {
+            // Convert uppercase to lowercase
+            if c.is_ascii_uppercase() {
+                // If previous char was lowercase, add hyphen before (camelCase handling)
+                if !prev_was_separator && !result.is_empty() {
+                    let last_char = result.chars().last().unwrap();
+                    if last_char.is_ascii_lowercase() {
+                        result.push('-');
+                    }
+                }
+                result.push(c.to_ascii_lowercase());
+            } else {
+                result.push(c);
+            }
+            prev_was_separator = false;
+        } else if !prev_was_separator && !result.is_empty() {
+            // Non-alphanumeric becomes hyphen (but not consecutive)
+            result.push('-');
+            prev_was_separator = true;
+        }
+    }
+
+    // Remove trailing hyphen
+    while result.ends_with('-') {
+        result.pop();
+    }
+
+    // Ensure it starts with a letter (prepend 'skill-' if starts with digit)
+    if result.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        result = format!("skill-{}", result);
+    }
+
+    // If empty, return a default
+    if result.is_empty() {
+        return "unnamed-skill".to_string();
+    }
+
+    result
+}
+
 /// Skill metadata parsed from YAML frontmatter
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SkillMeta {
@@ -203,9 +256,18 @@ description: {}
         )
     }
 
-    /// Get the skill name (shorthand for meta.name)
+    /// Get the skill name (from frontmatter)
     pub fn name(&self) -> &str {
         &self.meta.name
+    }
+
+    /// Get the folder name (actual directory name on disk)
+    /// This may differ from name() if frontmatter name doesn't match folder
+    pub fn folder_name(&self) -> &str {
+        self.path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&self.meta.name)
     }
 
     /// Get the skill description (shorthand for meta.description)
