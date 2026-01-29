@@ -3,7 +3,10 @@
 //! Command-line interface for managing skills across AI CLI tools.
 
 use clap::Parser;
-use talent_core::{Config, SkillManager, SyncResult, ValidationStatus};
+use talent_core::{
+    Config, ConflictResolution, ImportSelection, Importer, SkillManager, SyncResult,
+    ValidationStatus,
+};
 
 #[derive(Parser)]
 #[command(name = "talent")]
@@ -67,18 +70,58 @@ enum Commands {
         /// Specific skill to validate (validates all if not specified)
         name: Option<String>,
     },
+
+    /// Delete a skill
+    Delete {
+        /// Name of the skill to delete
+        name: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        force: bool,
+    },
+
+    /// Import skills from detected AI CLI tools
+    Import {
+        /// Import all discovered skills without prompting
+        #[arg(long)]
+        all: bool,
+
+        /// Overwrite existing skills with same name
+        #[arg(long)]
+        overwrite: bool,
+
+        /// Output as JSON (for scripting)
+        #[arg(long)]
+        json: bool,
+
+        /// Dry run - show what would be imported without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Some(Commands::List { valid, invalid, json }) => cmd_list(valid, invalid, json),
+        Some(Commands::List {
+            valid,
+            invalid,
+            json,
+        }) => cmd_list(valid, invalid, json),
         Some(Commands::Sync { target, dry_run }) => cmd_sync(target, dry_run),
         Some(Commands::Doctor) => cmd_doctor(),
         Some(Commands::Targets { json }) => cmd_targets(json),
         Some(Commands::Create { name, description }) => cmd_create(&name, &description),
         Some(Commands::Validate { name }) => cmd_validate(name),
+        Some(Commands::Delete { name, force }) => cmd_delete(&name, force),
+        Some(Commands::Import {
+            all,
+            overwrite,
+            json,
+            dry_run,
+        }) => cmd_import(all, overwrite, json, dry_run),
         None => {
             println!("Talent - Agent Skills Manager");
             println!("Run 'talent --help' for usage");
@@ -93,7 +136,11 @@ fn main() {
 }
 
 /// List all skills
-fn cmd_list(valid_only: bool, invalid_only: bool, json: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn cmd_list(
+    valid_only: bool,
+    invalid_only: bool,
+    json: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut manager = SkillManager::new()?;
 
     // Validate all skills first to get their status
@@ -128,7 +175,10 @@ fn cmd_list(valid_only: bool, invalid_only: bool, json: bool) -> Result<(), Box<
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         if skills.is_empty() {
-            println!("No skills found in {}", manager.config().skills_dir.display());
+            println!(
+                "No skills found in {}",
+                manager.config().skills_dir.display()
+            );
             println!("\nCreate a skill with: talent create <name>");
             return Ok(());
         }
@@ -177,7 +227,10 @@ fn cmd_sync(target: Option<String>, dry_run: bool) -> Result<(), Box<dyn std::er
         match manager.sync_target(&target_id) {
             Some(result) => vec![result],
             None => {
-                eprintln!("Target '{}' not found. Run 'talent targets' to see available targets.", target_id);
+                eprintln!(
+                    "Target '{}' not found. Run 'talent targets' to see available targets.",
+                    target_id
+                );
                 return Ok(());
             }
         }
@@ -218,7 +271,10 @@ fn cmd_sync(target: Option<String>, dry_run: bool) -> Result<(), Box<dyn std::er
     let total_removed: usize = results.iter().map(|r| r.removed.len()).sum();
     let total_errors: usize = results.iter().map(|r| r.errors.len()).sum();
 
-    println!("Summary: {} created, {} removed, {} errors", total_created, total_removed, total_errors);
+    println!(
+        "Summary: {} created, {} removed, {} errors",
+        total_created, total_removed, total_errors
+    );
 
     Ok(())
 }
@@ -242,11 +298,19 @@ fn cmd_doctor() -> Result<(), Box<dyn std::error::Error>> {
             println!("  Config file: {}", config_path);
             println!(
                 "  Auto-sync: {}",
-                if config.preferences.auto_sync { "enabled" } else { "disabled" }
+                if config.preferences.auto_sync {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
             );
             println!(
                 "  Validate on sync: {}",
-                if config.preferences.validate_on_sync { "enabled" } else { "disabled" }
+                if config.preferences.validate_on_sync {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
             );
         }
         Err(e) => {
@@ -373,7 +437,11 @@ fn cmd_targets(json: bool) -> Result<(), Box<dyn std::error::Error>> {
             println!("    Skills: {}", target.skills_path.display());
             println!(
                 "    Status: {}",
-                if target.enabled { "enabled" } else { "disabled" }
+                if target.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
             );
             println!();
         }
@@ -421,7 +489,12 @@ fn cmd_validate(name: Option<String>) -> Result<(), Box<dyn std::error::Error>> 
         let valid_count = results.iter().filter(|r| r.is_ok()).count();
         let invalid_count = results.len() - valid_count;
 
-        println!("Validated {} skills: {} valid, {} invalid\n", results.len(), valid_count, invalid_count);
+        println!(
+            "Validated {} skills: {} valid, {} invalid\n",
+            results.len(),
+            valid_count,
+            invalid_count
+        );
 
         for skill in manager.skills() {
             let icon = match skill.validation_status {
@@ -437,6 +510,268 @@ fn cmd_validate(name: Option<String>) -> Result<(), Box<dyn std::error::Error>> 
                 println!();
             }
         }
+    }
+
+    Ok(())
+}
+
+/// Delete a skill
+fn cmd_delete(name: &str, force: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let mut manager = SkillManager::new()?;
+
+    // Check if skill exists
+    if manager.get_skill(name).is_none() {
+        eprintln!("Skill '{}' not found.", name);
+        std::process::exit(1);
+    }
+
+    // Prompt for confirmation unless --force is used
+    if !force {
+        eprint!("Delete skill '{}'? This cannot be undone. [y/N] ", name);
+        use std::io::{self, BufRead};
+        let stdin = io::stdin();
+        let response = stdin.lock().lines().next();
+        match response {
+            Some(Ok(line)) if line.trim().eq_ignore_ascii_case("y") => {}
+            _ => {
+                println!("Cancelled.");
+                return Ok(());
+            }
+        }
+    }
+
+    // Delete the skill (removes symlinks from all targets first)
+    manager.delete_skill(name)?;
+    println!("Deleted skill: {}", name);
+
+    Ok(())
+}
+
+/// Import skills from detected targets
+fn cmd_import(
+    all: bool,
+    overwrite: bool,
+    json: bool,
+    dry_run: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let manager = SkillManager::new()?;
+    let importer = Importer::from_config(manager.config());
+
+    // Discover importable skills
+    let discovered = importer.discover_importable_skills(manager.targets());
+
+    if discovered.is_empty() {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "discovered": [],
+                    "message": "No importable skills found"
+                }))?
+            );
+        } else {
+            println!("No importable skills found in detected targets.");
+            println!("\nSkills already managed by Talent (symlinks) are automatically skipped.");
+        }
+        return Ok(());
+    }
+
+    // JSON output mode for scripting
+    if json && !all {
+        let output: Vec<_> = discovered
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "name": &s.name,
+                    "description": &s.description,
+                    "source_path": &s.source_path,
+                    "source_target": format!("{:?}", s.source_target),
+                    "has_conflict": s.conflict.is_some(),
+                    "conflict_description": s.conflict.as_ref().map(|c| &c.existing_description),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&output)?);
+        return Ok(());
+    }
+
+    // Display discovered skills
+    if !json {
+        println!("Discovered {} importable skill(s):\n", discovered.len());
+
+        for skill in &discovered {
+            let conflict_marker = if skill.conflict.is_some() {
+                " [CONFLICT]"
+            } else {
+                ""
+            };
+            println!(
+                "  {} - {} (from {:?}){}",
+                skill.name, skill.description, skill.source_target, conflict_marker
+            );
+            if let Some(ref conflict) = skill.conflict {
+                println!("      Existing: {}", conflict.existing_description);
+            }
+        }
+        println!();
+    }
+
+    if dry_run {
+        if json {
+            let output: Vec<_> = discovered
+                .iter()
+                .map(|s| {
+                    serde_json::json!({
+                        "name": &s.name,
+                        "would_import": s.conflict.is_none() || overwrite,
+                        "has_conflict": s.conflict.is_some(),
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        } else {
+            println!("Dry run - no changes made.");
+            let importable: Vec<_> = discovered
+                .iter()
+                .filter(|s| s.conflict.is_none() || overwrite)
+                .collect();
+            println!(
+                "Would import {} skill(s){}",
+                importable.len(),
+                if overwrite { " (with overwrite)" } else { "" }
+            );
+        }
+        return Ok(());
+    }
+
+    // Non-interactive mode: import all
+    if all {
+        let selections: Vec<ImportSelection> = discovered
+            .iter()
+            .map(|s| ImportSelection {
+                name: s.name.clone(),
+                source_path: s.source_path.clone(),
+                resolution: if s.conflict.is_some() {
+                    if overwrite {
+                        ConflictResolution::Overwrite
+                    } else {
+                        ConflictResolution::Skip
+                    }
+                } else {
+                    ConflictResolution::Import
+                },
+            })
+            .collect();
+
+        let result = importer.import_selections(&selections);
+
+        if json {
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        } else {
+            if !result.imported.is_empty() {
+                println!("Imported: {}", result.imported.join(", "));
+            }
+            if !result.skipped.is_empty() {
+                println!("Skipped (conflicts): {}", result.skipped.join(", "));
+            }
+            if !result.errors.is_empty() {
+                for (name, error) in &result.errors {
+                    println!("Error importing '{}': {}", name, error);
+                }
+            }
+
+            // Sync after import
+            if !result.imported.is_empty() {
+                println!("\nSyncing imported skills to targets...");
+                let mut manager = SkillManager::new()?;
+                manager.validate_all();
+                let sync_results = manager.sync_all();
+                let total_synced: usize = sync_results.iter().map(|r| r.created.len()).sum();
+                println!("Synced {} symlinks.", total_synced);
+            }
+        }
+
+        return Ok(());
+    }
+
+    // Interactive mode: prompt for each skill
+    use std::io::{self, BufRead, Write};
+
+    let mut selections = Vec::new();
+
+    for skill in &discovered {
+        let prompt = if skill.conflict.is_some() {
+            format!(
+                "Import '{}'? (conflict with existing) [y/N/o(verwrite)] ",
+                skill.name
+            )
+        } else {
+            format!("Import '{}'? [Y/n] ", skill.name)
+        };
+
+        eprint!("{}", prompt);
+        io::stderr().flush()?;
+
+        let stdin = io::stdin();
+        let response = stdin.lock().lines().next();
+
+        let resolution = match response {
+            Some(Ok(line)) => {
+                let line = line.trim().to_lowercase();
+                if skill.conflict.is_some() {
+                    // Conflict: default to skip
+                    match line.as_str() {
+                        "y" | "yes" => ConflictResolution::Skip, // y means skip for conflicts
+                        "o" | "overwrite" => ConflictResolution::Overwrite,
+                        _ => ConflictResolution::Skip,
+                    }
+                } else {
+                    // No conflict: default to import
+                    match line.as_str() {
+                        "n" | "no" => ConflictResolution::Skip,
+                        _ => ConflictResolution::Import,
+                    }
+                }
+            }
+            _ => {
+                if skill.conflict.is_some() {
+                    ConflictResolution::Skip
+                } else {
+                    ConflictResolution::Import
+                }
+            }
+        };
+
+        selections.push(ImportSelection {
+            name: skill.name.clone(),
+            source_path: skill.source_path.clone(),
+            resolution,
+        });
+    }
+
+    let result = importer.import_selections(&selections);
+
+    println!();
+    if !result.imported.is_empty() {
+        println!("Imported: {}", result.imported.join(", "));
+    }
+    if !result.skipped.is_empty() {
+        println!("Skipped: {}", result.skipped.join(", "));
+    }
+    if !result.errors.is_empty() {
+        for (name, error) in &result.errors {
+            println!("Error importing '{}': {}", name, error);
+        }
+    }
+
+    // Sync after import
+    if !result.imported.is_empty() {
+        println!("\nSyncing imported skills to targets...");
+        let mut manager = SkillManager::new()?;
+        manager.validate_all();
+        let sync_results = manager.sync_all();
+        let total_synced: usize = sync_results.iter().map(|r| r.created.len()).sum();
+        println!("Synced {} symlinks.", total_synced);
     }
 
     Ok(())
