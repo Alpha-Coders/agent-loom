@@ -32,6 +32,15 @@ Filename: plans/20260129-talent-implementation.md
   - `get_targets() -> Vec<TargetInfo>` - List targets for frontend
   - `sync_all() -> Vec<SyncResultInfo>` - Trigger sync from UI
   - `create_skill(name: String) -> Result<String>` - Create new skill
+  - `discover_importable_skills() -> Vec<DiscoveredSkill>` - Scan targets for importable skills
+  - `import_skills(selections: Vec<ImportSelection>) -> ImportResult` - Import selected skills
+  - `check_filemerge_available() -> bool` - Check if FileMerge (opendiff) is available
+  - `open_filemerge(existing: String, incoming: String) -> Result<()>` - Open FileMerge for diff
+
+- **Importer** (new module)
+  - `discover_importable_skills(targets: &[Target]) -> Vec<DiscoveredSkill>` - Scan target directories
+  - `import_skill(source: &Path, name: &str, overwrite: bool) -> Result<ImportedSkill>` - Copy skill to central storage
+  - `check_conflict(name: &str, skills_dir: &Path) -> Option<ConflictInfo>` - Check if skill already exists
 
 ## Steps
 
@@ -60,8 +69,209 @@ Filename: plans/20260129-talent-implementation.md
 ### Phase 4-6: Future (Editor, Import/Export, Polish)
 
 14. [x] Add CodeMirror 6 editor for skill editing
-15. [ ] Implement skill import/export functionality
+15. [ ] Implement skill import functionality (see Design: Skill Import Feature below)
+    - 15.1 [ ] Add importer module to talent-core (`crates/talent-core/src/importer.rs`)
+    - 15.2 [ ] Add Tauri commands for import (`discover_importable_skills`, `import_skills`, `check_filemerge_available`, `open_filemerge`)
+    - 15.3 [ ] Create ImportDialog.svelte component
+    - 15.4 [ ] Update empty state in SkillList.svelte with import option
+    - 15.5 [ ] Add Import button to toolbar
+    - 15.6 [ ] Write tests for importer module
 16. [ ] Polish UI and add system tray support
+
+## Design: Skill Import Feature
+
+### Overview
+
+Allow users to migrate existing skills from target CLI directories (Codex, Claude Code, etc.) into Talent's central storage (`~/.talent/skills/`). This addresses the "No skills found" experience for users who already have skills in their CLI tools.
+
+### Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Discovery scope | Structured only (`SKILL.md` dirs) | Avoids format conversion, Codex skills already compatible |
+| Conflict handling | Ask per-conflict | User control with visual diff option |
+| Diff tool | FileMerge (macOS) | Native tool, detected via `which opendiff` |
+| Migration trigger | Empty state + toolbar button | Prominent for new users, accessible for power users |
+| Import flow | One-click auto-scan | Single screen with checkboxes and conflict dropdowns |
+| Post-import | Auto-sync | Immediately distribute to all targets |
+
+### Section 1: Discovery Engine
+
+Scans all target directories for importable skills with proper `SKILL.md` structure.
+
+```
+For each target in [ClaudeCode, Codex, Gemini, Cursor, Amp, Goose]:
+  1. Get skills directory (e.g., ~/.codex/skills/)
+  2. Walk subdirectories (depth 1)
+  3. Check for SKILL.md file
+  4. Parse frontmatter to extract name, description
+  5. Skip if it's a symlink pointing to ~/.talent/skills/ (already managed)
+  6. Add to discovered list with source target info
+```
+
+**Key details:**
+- Reuses existing `Skill::load()` parsing logic
+- Filters out symlinks to avoid re-importing Talent-managed skills
+- Returns: `Vec<DiscoveredSkill>` with `name`, `description`, `source_path`, `source_target`
+
+### Section 2: Conflict Detection & Resolution
+
+Compares discovered skills against existing `~/.talent/skills/` and provides resolution options.
+
+**Conflict states:**
+
+| State | Indicator | Actions Available |
+|-------|-----------|-------------------|
+| **New** | Green "NEW" badge | Checkbox to import |
+| **Conflict** | Orange "EXISTS" badge | Skip / Overwrite / Compare |
+| **Already managed** | Grey "SYNCED" | Hidden (filtered out) |
+
+**FileMerge integration:**
+```rust
+fn open_filemerge(existing: &Path, incoming: &Path) -> Result<()> {
+    // Check if opendiff (FileMerge CLI) is available
+    if Command::new("which").arg("opendiff").status()?.success() {
+        Command::new("opendiff")
+            .arg(existing.join("SKILL.md"))
+            .arg(incoming.join("SKILL.md"))
+            .spawn()?;
+    } else {
+        // Fallback: show diff in UI or terminal
+    }
+}
+```
+
+**Resolution dropdown per conflict:**
+- **Skip** - Don't import, keep existing
+- **Overwrite** - Replace existing with incoming
+- **Compare** - Open FileMerge, then user picks Skip or Overwrite
+
+### Section 3: Import Dialog UI
+
+**Component:** `ImportDialog.svelte`
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Import Skills from Other Tools                    [X]  │
+├─────────────────────────────────────────────────────────┤
+│  Scanning: Codex, Claude Code, Gemini, Cursor...        │
+│                                                         │
+│  ☑ gh-fix-ci          Codex       [NEW]                │
+│  ☑ gh-address-comments Codex      [NEW]                │
+│  ☑ pokemon-fetch      Codex       [NEW]                │
+│  ☑ pptx               Codex       [EXISTS ▼]           │
+│                                   ├─ Skip              │
+│                                   ├─ Overwrite         │
+│                                   └─ Compare...        │
+│  ☑ create-plan        Codex       [NEW]                │
+│                                                         │
+│  Found 9 skills from 1 target                          │
+│  ─────────────────────────────────────────────────────  │
+│                              [Cancel]  [Import 8]       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**States:**
+- Loading: "Scanning targets..."
+- Empty: "No importable skills found"
+- Results: Checkbox list with conflict dropdowns
+
+### Section 4: Import Execution & Auto-Sync
+
+**Import process:**
+```rust
+fn import_skill(source: &Path, name: &str, overwrite: bool) -> Result<ImportedSkill> {
+    let dest = talent_skills_dir().join(name);
+
+    if dest.exists() && !overwrite {
+        return Err(Error::SkillExists(name.to_string()));
+    }
+
+    // Copy entire directory (SKILL.md + any bundled scripts/assets)
+    copy_dir_recursive(source, &dest)?;
+
+    Ok(ImportedSkill { name, path: dest })
+}
+```
+
+**Post-import flow:**
+1. Copy all selected skills to `~/.talent/skills/`
+2. Call `SkillManager::refresh_skills()` to reload
+3. Call `SkillManager::sync_all()` to distribute
+4. Return results: `{ imported: 8, synced_to: 4, errors: [] }`
+
+**UI feedback:**
+- Progress bar during import
+- Success toast: "Imported 8 skills, synced to 4 targets"
+- Error details if any failures
+
+### Section 5: Entry Points
+
+**Empty state modification** (`SkillList.svelte`):
+
+Current:
+```
+No skills found
+Create your first skill to get started
+```
+
+New:
+```
+No skills found
+┌─────────────────────┐  ┌──────────────────────┐
+│  + Create New Skill │  │  ↓ Import Existing   │
+└─────────────────────┘  └──────────────────────┘
+         or scan Codex, Claude Code, Gemini...
+```
+
+**Toolbar addition:**
+
+Current: `[Refresh] [Sync All] [New Skill]`
+
+New: `[Refresh] [Sync All] [Import] [New Skill]`
+
+### Data Types
+
+```rust
+// crates/talent-core/src/importer.rs
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiscoveredSkill {
+    pub name: String,
+    pub description: String,
+    pub source_path: PathBuf,
+    pub source_target: TargetKind,
+    pub conflict: Option<ConflictInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConflictInfo {
+    pub existing_path: PathBuf,
+    pub existing_description: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ImportSelection {
+    pub name: String,
+    pub source_path: PathBuf,
+    pub resolution: ConflictResolution,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum ConflictResolution {
+    Import,      // No conflict, just import
+    Skip,        // Conflict: keep existing
+    Overwrite,   // Conflict: replace with incoming
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportResult {
+    pub imported: Vec<String>,
+    pub skipped: Vec<String>,
+    pub errors: Vec<(String, String)>,
+    pub synced_to: usize,
+}
+```
 
 ## Implementation State
 
@@ -135,19 +345,26 @@ Filename: plans/20260129-talent-implementation.md
 
 ## Testing
 
-- Unit tests for each core module (config, skill, target, validator, syncer, watcher)
+- Unit tests for each core module (config, skill, target, validator, syncer, watcher, importer)
 - Integration test: create skill -> validate -> sync -> verify symlinks
+- Integration test: discover -> import -> sync -> verify skills appear in all targets
 - Edge cases:
   - Missing SKILL.md
   - Invalid frontmatter
   - Broken symlinks
   - Target directory doesn't exist
   - Permission errors
+  - Import edge cases:
+    - Symlink pointing to Talent (should be filtered out)
+    - Skill with bundled scripts/assets (should copy entire directory)
+    - Conflict with existing skill (test all resolutions)
+    - Empty target directory (no skills to import)
+    - FileMerge not available (fallback behavior)
 
 ## Open Questions
 
 - Should we support skill versioning?
-- How to handle conflicts when same skill name exists in target?
+- ~~How to handle conflicts when same skill name exists in target?~~ **Resolved**: Ask per-conflict with Skip/Overwrite/Compare options, FileMerge integration on macOS
 - Should we support skill templates beyond the basic one?
 
 ## Risks
