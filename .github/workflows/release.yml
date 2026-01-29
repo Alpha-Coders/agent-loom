@@ -1,0 +1,233 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g., 0.1.0-beta.1)'
+        required: false
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            arch: arm64
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            arch: x64
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            arch: x64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch: x64
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Determine version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          GH_REF: ${{ github.ref }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          elif [[ "$GH_REF" == refs/tags/v* ]]; then
+            echo "version=${GH_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(node -p "require('./package.json').version")-dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build (macOS)
+        if: matrix.platform == 'macos-latest'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: npm run tauri build -- --target "$TARGET"
+
+      - name: Build (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: npm run tauri build -- --target "$TARGET" --bundles appimage
+
+      - name: Build (Windows)
+        if: matrix.platform == 'windows-latest'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: npm run tauri build -- --target "$TARGET" --bundles nsis
+
+      - name: Package macOS artifact
+        if: matrix.platform == 'macos-latest'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          APP_PATH="src-tauri/target/${TARGET}/release/bundle/macos/Talent.app"
+          ZIP_NAME="Talent-${VERSION}-macos-${ARCH}.zip"
+
+          cd "$(dirname "$APP_PATH")"
+          zip -r -q "${GITHUB_WORKSPACE}/${ZIP_NAME}" "Talent.app"
+          echo "artifact_name=${ZIP_NAME}" >> $GITHUB_ENV
+
+      - name: Package Linux artifact
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          APPIMAGE=$(find src-tauri/target -name "*.AppImage" | head -1)
+          NEW_NAME="Talent-${VERSION}-linux-x64.AppImage"
+
+          cp "$APPIMAGE" "$NEW_NAME"
+          chmod +x "$NEW_NAME"
+          echo "artifact_name=${NEW_NAME}" >> $GITHUB_ENV
+
+      - name: Package Windows artifact
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          EXE=$(find src-tauri/target -name "*.exe" -path "*/release/bundle/*" | head -1)
+          NEW_NAME="Talent-${VERSION}-windows-x64.exe"
+
+          cp "$EXE" "$NEW_NAME"
+          echo "artifact_name=${NEW_NAME}" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Talent-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ env.artifact_name }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Determine version and release type
+        id: release_info
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          GH_REF: ${{ github.ref }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+            DRAFT="true"
+            PRERELEASE="true"
+          elif [[ "$GH_REF" == refs/tags/v* ]]; then
+            VERSION="${GH_REF#refs/tags/v}"
+            DRAFT="false"
+            # Mark as prerelease if version contains hyphen (e.g., 0.1.0-beta.1)
+            if [[ "$VERSION" == *-* ]]; then
+              PRERELEASE="true"
+            else
+              PRERELEASE="false"
+            fi
+          else
+            VERSION="dev-$(date +%Y%m%d)"
+            DRAFT="true"
+            PRERELEASE="true"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "draft=$DRAFT" >> $GITHUB_OUTPUT
+          echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag }}
+          name: Talent ${{ steps.release_info.outputs.version }}
+          draft: ${{ steps.release_info.outputs.draft }}
+          prerelease: ${{ steps.release_info.outputs.prerelease }}
+          files: |
+            artifacts/*
+          body: |
+            ## Talent ${{ steps.release_info.outputs.version }}
+
+            ### Downloads
+
+            | Platform | Architecture | Download |
+            |----------|--------------|----------|
+            | macOS | Apple Silicon (M1/M2) | `Talent-${{ steps.release_info.outputs.version }}-macos-arm64.zip` |
+            | macOS | Intel | `Talent-${{ steps.release_info.outputs.version }}-macos-x64.zip` |
+            | Linux | x64 | `Talent-${{ steps.release_info.outputs.version }}-linux-x64.AppImage` |
+            | Windows | x64 | `Talent-${{ steps.release_info.outputs.version }}-windows-x64.exe` |
+
+            ### Installation
+
+            **macOS:** Unzip and drag `Talent.app` to Applications. On first run, right-click and select "Open" to bypass Gatekeeper.
+
+            **Linux:** Make the AppImage executable (`chmod +x *.AppImage`) and run it.
+
+            **Windows:** Run the `.exe` file directly (portable, no installation required).
+
+            ### Checksums
+
+            See `checksums.txt` for SHA256 verification.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
