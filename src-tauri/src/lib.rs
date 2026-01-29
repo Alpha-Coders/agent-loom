@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Manager;
-use talent_core::{ConflictResolution, SkillManager, TargetKind, ValidationStatus};
+use talent_core::{ConflictResolution, SkillManager, ValidationStatus};
 
 /// Skill information for the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,14 +72,7 @@ impl From<&talent_core::DiscoveredSkill> for DiscoveredSkillInfo {
             name: skill.name.clone(),
             description: skill.description.clone(),
             source_path: skill.source_path.display().to_string(),
-            source_target: match skill.source_target {
-                TargetKind::ClaudeCode => "Claude Code".to_string(),
-                TargetKind::Codex => "Codex".to_string(),
-                TargetKind::Gemini => "Gemini".to_string(),
-                TargetKind::Cursor => "Cursor".to_string(),
-                TargetKind::Amp => "Amp".to_string(),
-                TargetKind::Goose => "Goose".to_string(),
-            },
+            source_target: skill.source_target.display_name().to_string(),
             has_conflict: skill.conflict.is_some(),
             existing_description: skill.conflict.as_ref().map(|c| c.existing_description.clone()),
         }
