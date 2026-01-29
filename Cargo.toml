@@ -1,0 +1,34 @@
+[workspace]
+resolver = "2"
+members = ["crates/talent-core", "crates/talent-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Talent Contributors"]
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# Error handling
+thiserror = "2.0"
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+walkdir = "2.5"
+dirs = "6.0"
+
+# File watching
+notify = "8.0"
+notify-debouncer-mini = "0.5"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Internal crates
+talent-core = { path = "crates/talent-core" }

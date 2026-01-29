@@ -1,0 +1,16 @@
+[package]
+name = "talent-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "CLI for Talent - Agent Skills Manager"
+
+[[bin]]
+name = "talent"
+path = "src/main.rs"
+
+[dependencies]
+talent-core.workspace = true
+clap.workspace = true
+serde_json.workspace = true
