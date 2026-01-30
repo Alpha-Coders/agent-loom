@@ -46,14 +46,8 @@ pub struct TargetConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
-    /// Whether to watch for file changes and auto-sync
-    pub auto_sync: bool,
-
     /// Whether to validate skills before syncing
     pub validate_on_sync: bool,
-
-    /// File watch debounce duration in milliseconds
-    pub watch_debounce_ms: u64,
 }
 
 impl Default for Config {
@@ -78,9 +72,7 @@ impl Default for TargetConfig {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
-            auto_sync: true,
             validate_on_sync: true,
-            watch_debounce_ms: 500,
         }
     }
 }
@@ -181,9 +173,7 @@ mod tests {
     fn default_config_has_sensible_values() {
         let config = Config::default();
         assert!(config.skills_dir.to_string_lossy().contains(".talent"));
-        assert!(config.preferences.auto_sync);
         assert!(config.preferences.validate_on_sync);
-        assert_eq!(config.preferences.watch_debounce_ms, 500);
     }
 
     #[test]
@@ -200,13 +190,13 @@ mod tests {
         let config_path = temp_dir.path().join("config.toml");
 
         let mut config = Config::default();
-        config.preferences.auto_sync = false;
+        config.preferences.validate_on_sync = false;
         config.enable_target("claude-code");
 
         config.save_to(&config_path).unwrap();
         let loaded = Config::load_from(&config_path).unwrap();
 
-        assert!(!loaded.preferences.auto_sync);
+        assert!(!loaded.preferences.validate_on_sync);
         assert!(loaded.targets.contains_key("claude-code"));
         assert!(loaded.targets["claude-code"].enabled);
     }
@@ -239,9 +229,7 @@ mod tests {
 skills_dir = "/custom/skills"
 
 [preferences]
-auto_sync = false
-validate_on_sync = true
-watch_debounce_ms = 1000
+validate_on_sync = false
 
 [targets.claude-code]
 enabled = true
@@ -252,8 +240,7 @@ skills_path = "/path/to/claude/skills"
         let config = Config::load_from(&config_path).unwrap();
 
         assert_eq!(config.skills_dir, PathBuf::from("/custom/skills"));
-        assert!(!config.preferences.auto_sync);
-        assert_eq!(config.preferences.watch_debounce_ms, 1000);
+        assert!(!config.preferences.validate_on_sync);
         assert!(config.targets.contains_key("claude-code"));
         assert_eq!(
             config.targets["claude-code"].skills_path,

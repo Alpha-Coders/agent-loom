@@ -25,9 +25,9 @@ Talent provides a unified interface to manage AI agent skills (like Claude Code 
 ## Features
 
 - **Unified Management**: Manage all your AI skills from one place
-- **Multi-Target Sync**: Automatically sync skills to Claude, Codex, Gemini, Cursor, Amp, and Goose
-- **Validation Engine**: Validate skills against agentskills.io rules before deployment
-- **File Watching**: Auto-sync on skill changes
+- **Multi-Target Sync**: Automatically sync skills to Claude, Codex, Gemini, Cursor, Amp, Goose, and more
+- **Validation Engine**: Validate skills against agentskills.io specification
+- **Built-in Editor**: Edit skills with syntax highlighting and live preview
 - **Cross-Platform**: Works on macOS, Windows, and Linux
 
 ## Tech Stack
@@ -38,7 +38,6 @@ Talent provides a unified interface to manage AI agent skills (like Claude Code 
 | Framework | Tauri v2 |
 | Frontend | Svelte 5 + TypeScript + Vite |
 | Editor | CodeMirror 6 |
-| File Watching | notify crate |
 | CLI | clap |
 
 ## Architecture Diagram
@@ -62,7 +61,6 @@ flowchart TB
         WebView["WebView<br/>(WKWebView/WebView2)"]
         IPC["IPC Bridge<br/>invoke() / emit()"]
         Menu["Native Menu<br/>& Shortcuts"]
-        Tray["System Tray"]
         Window["Window Manager"]
     end
 
@@ -82,7 +80,6 @@ flowchart TB
             Manager["SkillManager"]
             Validator["Validator<br/>agentskills.io spec"]
             Syncer["Syncer<br/>Symlink Engine"]
-            Watcher["Watcher<br/>(notify crate)"]
             Config["Config<br/>(TOML)"]
         end
 
@@ -108,9 +105,9 @@ flowchart TB
         Claude["Claude Code<br/>~/.claude/skills/"]
         Codex["Codex<br/>~/.codex/skills/"]
         Gemini["Gemini<br/>~/.gemini/skills/"]
-        Cursor["Cursor<br/>~/.cursor/skills/"]
+        Cursor["Cursor<br/>~/.cursor/skills-cursor/"]
         Amp["Amp<br/>~/.amp/skills/"]
-        Goose["Goose<br/>~/.config/goose/skills/"]
+        Goose["Goose<br/>~/.goose/skills/"]
     end
 
     %% Connections
@@ -118,7 +115,6 @@ flowchart TB
     IPC <-->|"Commands & Events"| Commands
     WebView --> Frontend
     Menu -->|"Events"| IPC
-    Tray -->|"Events"| IPC
     Window --> WebView
 
     Commands --> TalentCore
@@ -126,12 +122,10 @@ flowchart TB
 
     Manager --> Validator
     Manager --> Syncer
-    Manager --> Watcher
     Manager --> Config
 
     Syncer -->|"Read Skills"| SkillsDir
     Syncer -->|"Create Symlinks"| Targets
-    Watcher -->|"Monitor Changes"| SkillsDir
     Config -->|"Read/Write"| ConfigFile
 
     %% Styling
@@ -142,8 +136,8 @@ flowchart TB
     classDef targets fill:#a8dadc,stroke:#333,color:#000
 
     class Svelte,TS,Vite,CM frontend
-    class WebView,IPC,Menu,Tray,Window tauri
-    class TauriApp,Commands,TalentCore,Manager,Validator,Syncer,Watcher,Config,TalentCLI rust
+    class WebView,IPC,Menu,Window tauri
+    class TauriApp,Commands,TalentCore,Manager,Validator,Syncer,Config,TalentCLI rust
     class TalentDir,SkillsDir,ConfigFile storage
     class Claude,Codex,Gemini,Cursor,Amp,Goose targets
 ```
@@ -155,7 +149,6 @@ flowchart TB
 3. **Commands → Core** → Business logic in `talent-core`
 4. **Core → File System** → Read/write skills, create symlinks
 5. **File System → Targets** → Symlinks point to central skill storage
-6. **Backend → Frontend** → Events emitted via `emit()` for updates
 
 ## Project Structure
 
@@ -171,7 +164,6 @@ talent/
 │   │       ├── target.rs         # Target (CLI tool) model
 │   │       ├── validator.rs      # Skill validation
 │   │       ├── syncer.rs         # Symlink synchronization
-│   │       ├── watcher.rs        # File system watching
 │   │       └── manager.rs        # Integration layer
 │   └── talent-cli/               # CLI application
 │       └── src/main.rs
@@ -222,9 +214,15 @@ talent doctor
 | Claude Code | `~/.claude/skills/` |
 | OpenAI Codex | `~/.codex/skills/` |
 | Gemini CLI | `~/.gemini/skills/` |
-| Cursor | `~/.cursor/skills/` |
+| Cursor | `~/.cursor/skills-cursor/` |
 | Amp | `~/.amp/skills/` |
-| Goose | `~/.config/goose/skills/` |
+| Goose | `~/.goose/skills/` |
+| Roo Code | `~/.roo-code/skills/` |
+| OpenCode | `~/.opencode/skills/` |
+| Vibe | `~/.vibe/skills/` |
+| Firebender | `~/.firebender/skills/` |
+| Mux | `~/.mux/skills/` |
+| Autohand | `~/.autohand/skills/` |
 
 ## Development
 

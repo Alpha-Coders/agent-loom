@@ -5,12 +5,10 @@
 
 mod commands;
 mod menu;
-mod tray;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{Manager, RunEvent};
 use talent_core::{ConflictResolution, SkillManager, ValidationStatus};
 
 /// Skill information for the frontend
@@ -71,7 +69,6 @@ pub struct StatsInfo {
     pub invalid_skills: usize,
     pub total_targets: usize,
     pub enabled_targets: usize,
-    pub is_watching: bool,
 }
 
 /// Discovered skill for import UI
@@ -150,22 +147,6 @@ pub fn run() {
             // Create and set application menu
             let menu = menu::create_menu(app.handle())?;
             app.set_menu(menu)?;
-
-            // Initialize system tray
-            tray::create_tray(app.handle())?;
-
-            // Set up close-to-tray behavior for main window (Cmd+W hides, Cmd+Q quits)
-            if let Some(window) = app.get_webview_window("main") {
-                let window_clone = window.clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        // Prevent the window from closing, just hide it
-                        api.prevent_close();
-                        let _ = window_clone.hide();
-                    }
-                });
-            }
-
             Ok(())
         })
         .on_menu_event(|app, event| {
@@ -201,17 +182,6 @@ pub fn run() {
             // Menu state
             commands::set_save_menu_enabled,
         ])
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application")
-        .run(|_app, _event| {
-            // Handle dock icon click on macOS (reopen event)
-            #[cfg(target_os = "macos")]
-            if let RunEvent::Reopen { .. } = _event {
-                if let Some(window) = _app.get_webview_window("main") {
-                    let _ = window.unminimize();
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-        });
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

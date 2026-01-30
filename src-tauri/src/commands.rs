@@ -93,7 +93,6 @@ pub fn get_stats(state: tauri::State<'_, AppState>) -> Result<StatsInfo, String>
         invalid_skills: stats.invalid_skills,
         total_targets: stats.total_targets,
         enabled_targets: stats.enabled_targets,
-        is_watching: stats.is_watching,
     })
 }
 

@@ -4,7 +4,7 @@
 //! - Skill discovery and parsing
 //! - Target CLI detection
 //! - Symlink synchronization
-//! - File watching for auto-sync
+//! - Validation
 
 pub mod config;
 pub mod error;
@@ -14,7 +14,6 @@ pub mod skill;
 pub mod syncer;
 pub mod target;
 pub mod validator;
-pub mod watcher;
 
 pub use config::Config;
 pub use error::{Error, Result};
@@ -30,4 +29,3 @@ pub use skill::{
 pub use syncer::{SyncError, SyncResult, Syncer};
 pub use target::{Target, TargetInfo, TargetKind};
 pub use validator::Validator;
-pub use watcher::{SkillEvent, SkillWatcher};

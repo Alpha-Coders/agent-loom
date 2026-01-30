@@ -1,7 +1,7 @@
 //! Skill Manager - Integration layer for all Talent components
 //!
 //! The SkillManager is the main entry point for interacting with Talent.
-//! It integrates config, skills, targets, validation, syncing, and file watching.
+//! It integrates config, skills, targets, validation, and syncing.
 
 use crate::config::Config;
 use crate::error::{Error, Result};
@@ -9,7 +9,6 @@ use crate::skill::{discover_skills, Skill, ValidationStatus};
 use crate::syncer::{SyncResult, Syncer};
 use crate::target::Target;
 use crate::validator::Validator;
-use crate::watcher::{SkillEvent, SkillWatcher};
 use std::path::PathBuf;
 
 /// Main manager for Talent operations
@@ -28,9 +27,6 @@ pub struct SkillManager {
 
     /// Skill validator
     validator: Validator,
-
-    /// File watcher (optional - only created if watching is enabled)
-    watcher: Option<SkillWatcher>,
 }
 
 impl SkillManager {
@@ -51,26 +47,12 @@ impl SkillManager {
         // Detect targets and merge with config
         let targets = Self::load_targets_with_config(&config);
 
-        // Create watcher if auto-sync is enabled
-        let watcher = if config.preferences.auto_sync {
-            match SkillWatcher::new(&config.skills_dir, config.preferences.watch_debounce_ms) {
-                Ok(w) => Some(w),
-                Err(e) => {
-                    eprintln!("Warning: Could not start file watcher: {e}");
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
         Ok(Self {
             config,
             skills,
             targets,
             syncer: Syncer::new(),
             validator: Validator::new(),
-            watcher,
         })
     }
 
@@ -453,43 +435,6 @@ impl SkillManager {
         format!("---{}{}", updated_yaml, rest)
     }
 
-    /// Poll for file watcher events
-    ///
-    /// Returns any pending events since the last poll.
-    /// If the watcher is not enabled, returns an empty vector.
-    pub fn poll_events(&self) -> Vec<SkillEvent> {
-        match &self.watcher {
-            Some(w) => w.poll(),
-            None => Vec::new(),
-        }
-    }
-
-    /// Process file watcher events
-    ///
-    /// This should be called periodically to handle file changes.
-    /// It refreshes skills and optionally triggers a sync.
-    pub fn process_events(&mut self) -> Result<Vec<SyncResult>> {
-        let events = self.poll_events();
-
-        if events.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Refresh skills to pick up changes
-        self.refresh_skills()?;
-
-        // Validate all skills
-        self.validate_all();
-
-        // Sync to all targets
-        Ok(self.sync_all())
-    }
-
-    /// Check if the manager has a file watcher enabled
-    pub fn is_watching(&self) -> bool {
-        self.watcher.is_some()
-    }
-
     /// Get enabled targets
     pub fn enabled_targets(&self) -> impl Iterator<Item = &Target> {
         self.targets.iter().filter(|t| t.enabled)
@@ -630,7 +575,6 @@ impl SkillManager {
                 .count(),
             total_targets: self.targets.len(),
             enabled_targets: self.targets.iter().filter(|t| t.enabled).count(),
-            is_watching: self.is_watching(),
         }
     }
 }
@@ -643,7 +587,6 @@ pub struct ManagerStats {
     pub invalid_skills: usize,
     pub total_targets: usize,
     pub enabled_targets: usize,
-    pub is_watching: bool,
 }
 
 #[cfg(test)]
@@ -655,9 +598,7 @@ mod tests {
         Config {
             skills_dir: temp_dir.path().join("skills"),
             preferences: crate::config::Preferences {
-                auto_sync: false, // Disable watcher for tests
                 validate_on_sync: true,
-                watch_debounce_ms: 100,
             },
             ..Default::default()
         }
@@ -670,7 +611,6 @@ mod tests {
 
         let manager = SkillManager::with_config(config).unwrap();
         assert!(manager.skills().is_empty());
-        assert!(!manager.is_watching()); // Auto-sync disabled
     }
 
     #[test]
@@ -755,7 +695,6 @@ mod tests {
         let stats = manager.stats();
         assert_eq!(stats.total_skills, 2);
         assert_eq!(stats.valid_skills, 1);
-        assert!(!stats.is_watching);
     }
 
     #[test]
