@@ -1,6 +1,9 @@
 //! Tauri commands for the frontend
 
-use crate::{AppState, DiscoveredSkillInfo, ImportResultInfo, ImportSelectionInfo, SkillInfo, StatsInfo};
+use crate::{
+    AppState, DiscoveredSkillInfo, FolderImportSelectionInfo, ImportResultInfo, ImportSelectionInfo,
+    ScannedSkillInfo, SkillInfo, StatsInfo,
+};
 use std::path::PathBuf;
 use talent_core::{check_filemerge_available, open_filemerge, Importer, SyncResult, TargetInfo};
 
@@ -354,4 +357,55 @@ pub fn fix_all_skills(state: tauri::State<'_, AppState>) -> Result<Vec<(String, 
 #[tauri::command]
 pub fn set_save_menu_enabled(app: tauri::AppHandle, enabled: bool) {
     crate::menu::set_save_enabled(&app, enabled);
+}
+
+// === Folder Import Commands ===
+
+/// Scan a folder for skills (for drag-drop or folder picker import)
+#[tauri::command]
+pub fn scan_folder_for_skills(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<Vec<ScannedSkillInfo>, String> {
+    let manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let importer = Importer::from_config(manager.config());
+
+    let scanned = importer
+        .scan_folder(&PathBuf::from(&path))
+        .map_err(|e| e.to_string())?;
+
+    Ok(scanned.iter().map(ScannedSkillInfo::from).collect())
+}
+
+/// Import selected skills from a folder scan
+#[tauri::command]
+pub fn import_from_folder(
+    state: tauri::State<'_, AppState>,
+    selections: Vec<FolderImportSelectionInfo>,
+) -> Result<ImportResultInfo, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let importer = Importer::from_config(manager.config());
+
+    // Convert frontend selections to core types
+    let core_selections: Vec<_> = selections.iter().map(|s| s.to_core()).collect();
+
+    // Import the skills
+    let mut result = importer.import_folder_selections(&core_selections);
+
+    // Refresh skills to pick up newly imported ones
+    manager.refresh_skills().map_err(|e| e.to_string())?;
+
+    // Validate all skills
+    manager.validate_all();
+
+    // Sync to all targets
+    let sync_results = manager.sync_all();
+    result.synced_to = sync_results.len();
+
+    Ok(ImportResultInfo {
+        imported: result.imported,
+        skipped: result.skipped,
+        errors: result.errors,
+        synced_to: result.synced_to,
+    })
 }

@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-  import { ask } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill, setSaveMenuEnabled } from './lib/api';
-  import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo } from './lib/types';
+  import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
+  import ConfirmDeleteModal from './lib/ConfirmDeleteModal.svelte';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill, setSaveMenuEnabled, scanFolderForSkills, importFromFolder } from './lib/api';
+  import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
-  import { Plus, RefreshCw, Download, X, Sparkles, Trash2 } from 'lucide-svelte';
+  import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
+  import { Plus, RefreshCw, Download, X, Sparkles, Trash2, FolderOpen } from 'lucide-svelte';
 
   // State using Svelte 5 runes
   let skills = $state<SkillInfo[]>([]);
@@ -26,6 +28,13 @@
   let isImporting = $state(false);
   let lastImportResult = $state<ImportResultInfo | null>(null);
 
+  // Folder import state
+  let isDragging = $state(false);
+  let isScanning = $state(false);
+  let showFolderImportModal = $state(false);
+  let scannedSkills = $state<ScannedSkillInfo[]>([]);
+  let isFolderImporting = $state(false);
+
   // Sidebar filter
   let activeFilter = $state<'all' | 'valid' | 'invalid'>('all');
 
@@ -34,6 +43,10 @@
   let availableTargetTypes = $state<[string, string][]>([]);
   let selectedTargetType = $state('');
   let customTargetPath = $state('');
+
+  // Delete confirmation state
+  let showDeleteModal = $state(false);
+  let skillToDelete = $state<SkillInfo | null>(null);
 
   // Editor state
   let editingSkill = $state<SkillInfo | null>(null);
@@ -170,21 +183,22 @@
     }
   }
 
-  async function handleDeleteSkill(skill: SkillInfo, event: MouseEvent) {
+  function handleDeleteSkill(skill: SkillInfo, event: MouseEvent) {
     event.stopPropagation();
+    skillToDelete = skill;
+    showDeleteModal = true;
+  }
 
-    // Confirmation dialog
-    const confirmed = await ask(`Delete "${skill.name}"?\n\nThis will permanently remove the skill and its symlinks from all targets.`, {
-      title: 'Delete Skill',
-      kind: 'warning',
-      okLabel: 'Delete',
-      cancelLabel: 'Cancel',
-    });
+  async function confirmDeleteSkill() {
+    if (!skillToDelete) return;
 
-    if (!confirmed) return;
-
+    const skill = skillToDelete;
     const folderName = skill.folder_name;
     const wasEditing = editingSkill?.folder_name === folderName;
+
+    // Close modal first
+    showDeleteModal = false;
+    skillToDelete = null;
 
     if (wasEditing) {
       editingSkill = null;
@@ -204,6 +218,11 @@
       skills = previousSkills;
       error = e instanceof Error ? e.message : String(e);
     }
+  }
+
+  function cancelDeleteSkill() {
+    showDeleteModal = false;
+    skillToDelete = null;
   }
 
   async function handleEditSkill(skill: SkillInfo) {
@@ -332,6 +351,133 @@
     }
   }
 
+  // === Folder Import Handlers ===
+
+  async function handleFolderPickerImport() {
+    try {
+      const selected = await openDialog({
+        directory: true,
+        multiple: false,
+        title: 'Select folder containing skills',
+      });
+
+      if (selected && typeof selected === 'string') {
+        await scanAndShowModal(selected);
+      }
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function scanAndShowModal(folderPath: string) {
+    isScanning = true;
+    error = null;
+
+    try {
+      const results = await scanFolderForSkills(folderPath);
+      scannedSkills = results;
+
+      if (results.length === 0) {
+        showSnackbar('No skills found in folder', 'info');
+      } else {
+        showFolderImportModal = true;
+      }
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      isScanning = false;
+    }
+  }
+
+  async function handleFolderImport(selections: FolderImportSelectionInfo[]) {
+    isFolderImporting = true;
+    error = null;
+
+    try {
+      const result = await importFromFolder(selections);
+      showFolderImportModal = false;
+      await loadData();
+
+      if (result.errors.length > 0) {
+        lastImportResult = result;
+      } else if (result.imported.length > 0) {
+        showSnackbar(`Imported ${result.imported.length} skill${result.imported.length === 1 ? '' : 's'}`, 'success');
+      } else {
+        showSnackbar('No skills imported', 'info');
+      }
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      isFolderImporting = false;
+    }
+  }
+
+  function closeFolderImportModal() {
+    showFolderImportModal = false;
+    scannedSkills = [];
+  }
+
+  // === Drag and Drop Handlers ===
+
+  let dragCounter = 0;
+
+  function handleDragEnter(event: DragEvent) {
+    event.preventDefault();
+    dragCounter++;
+    if (event.dataTransfer?.types.includes('Files')) {
+      isDragging = true;
+    }
+  }
+
+  function handleDragLeave(event: DragEvent) {
+    event.preventDefault();
+    dragCounter--;
+    if (dragCounter === 0) {
+      isDragging = false;
+    }
+  }
+
+  function handleDragOver(event: DragEvent) {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  async function handleDrop(event: DragEvent) {
+    event.preventDefault();
+    isDragging = false;
+    dragCounter = 0;
+
+    const items = event.dataTransfer?.items;
+    if (!items || items.length === 0) return;
+
+    // Get the first dropped item
+    const item = items[0];
+    if (item.kind !== 'file') return;
+
+    const entry = item.webkitGetAsEntry?.();
+    if (!entry || !entry.isDirectory) {
+      showSnackbar('Please drop a folder, not a file', 'warning');
+      return;
+    }
+
+    // For Tauri, we need to get the path from the file
+    // The drag event in Tauri gives us the paths differently
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      // In Tauri, the path is available via the webkitRelativePath or we need to use the Tauri API
+      // For now, use the folder picker as fallback
+      const filePath = (files[0] as any).path;
+      if (filePath) {
+        await scanAndShowModal(filePath);
+      } else {
+        // Fallback: open folder picker
+        handleFolderPickerImport();
+      }
+    }
+  }
+
   // Target management
   async function handleToggleTarget(targetId: string) {
     try {
@@ -443,7 +589,16 @@
   });
 </script>
 
-<div class="app-container" class:editor-open={editingSkill !== null}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="app-container"
+  class:editor-open={editingSkill !== null}
+  ondragenter={handleDragEnter}
+  ondragleave={handleDragLeave}
+  ondragover={handleDragOver}
+  ondrop={handleDrop}
+  role="application"
+>
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-header">
@@ -502,9 +657,9 @@
               autocorrect="off"
               autocapitalize="off"
             />
-            <div class="form-actions">
-              <button onclick={() => showAddTargetForm = false}>Cancel</button>
-              <button class="primary" onclick={handleAddTarget} disabled={!selectedTargetType || !customTargetPath.trim()}>
+            <div class="add-target-actions">
+              <button class="add-target-btn" onclick={() => showAddTargetForm = false}>Cancel</button>
+              <button class="add-target-btn primary" onclick={handleAddTarget} disabled={!selectedTargetType || !customTargetPath.trim()}>
                 Add
               </button>
             </div>
@@ -533,18 +688,34 @@
     </nav>
 
     <div class="sidebar-footer">
-      <button class="sidebar-action" onclick={handleSync} disabled={isSyncing}>
+      <!-- Primary Action -->
+      <button class="sidebar-action-primary" onclick={handleSync} disabled={isSyncing}>
+        <RefreshCw class="icon" size={14} strokeWidth={2} />
         {isSyncing ? 'Syncing...' : 'Sync All'}
       </button>
-      <div class="sidebar-actions-row">
-        <button class="sidebar-action-small" onclick={handleRefresh} disabled={isLoading} title="Refresh skills">
-          <RefreshCw class="icon" size={16} strokeWidth={1.5} />
-        </button>
-        <button class="sidebar-action-small" onclick={handleImport} disabled={isImporting} title="Import from targets">
-          <Download class="icon" size={16} strokeWidth={1.5} />
-        </button>
-        <button class="sidebar-action-small" onclick={() => showNewSkillForm = !showNewSkillForm} title="New skill">
-          <Plus class="icon" size={16} strokeWidth={1.5} />
+
+      <!-- Action Toolbar -->
+      <div class="sidebar-toolbar">
+        <!-- Import Group -->
+        <div class="toolbar-group">
+          <button class="toolbar-button" onclick={handleRefresh} disabled={isLoading} title="Refresh skill list">
+            <RefreshCw class="icon" size={14} strokeWidth={1.5} />
+          </button>
+          <button class="toolbar-button" onclick={handleImport} disabled={isImporting} title="Import from targets">
+            <Download class="icon" size={14} strokeWidth={1.5} />
+          </button>
+          <button class="toolbar-button" onclick={handleFolderPickerImport} disabled={isScanning} title="Import from folder">
+            <FolderOpen class="icon" size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+
+        <!-- Divider -->
+        <div class="toolbar-divider"></div>
+
+        <!-- Create Action -->
+        <button class="toolbar-button toolbar-button-create" onclick={() => showNewSkillForm = !showNewSkillForm} title="New skill (⌘N)">
+          <Plus class="icon" size={14} strokeWidth={2} />
+          <span>New</span>
         </button>
       </div>
     </div>
@@ -612,8 +783,8 @@
         </div>
 
         <div class="form-actions">
-          <button onclick={() => showNewSkillForm = false}>Cancel</button>
-          <button class="primary" onclick={handleCreateSkill} disabled={!newSkillName.trim() || !newSkillDescription.trim()}>
+          <button class="form-btn" onclick={() => showNewSkillForm = false}>Cancel</button>
+          <button class="form-btn primary" onclick={handleCreateSkill} disabled={!newSkillName.trim() || !newSkillDescription.trim()}>
             <Plus class="icon-sm" size={14} strokeWidth={2} />
             Create Skill
           </button>
@@ -707,8 +878,11 @@
           {/if}
         </div>
         <div class="editor-actions">
-          <button onclick={handleCloseEditor}>Close</button>
-          <button class="primary" onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges}>
+          <button class="editor-btn" onclick={handleCloseEditor}>
+            <X class="icon" size={14} strokeWidth={1.5} />
+            <span>Close</span>
+          </button>
+          <button class="editor-btn primary" onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges}>
             {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
@@ -741,6 +915,35 @@
     </div>
   {/if}
 </div>
+
+<!-- Drop Zone Overlay -->
+{#if isDragging}
+  <div class="drop-zone-overlay">
+    <div class="drop-zone-content">
+      <FolderOpen class="drop-zone-icon" size={48} strokeWidth={1.5} />
+      <p>Drop folder to import skills</p>
+    </div>
+  </div>
+{/if}
+
+<!-- Folder Import Modal -->
+{#if showFolderImportModal}
+  <ImportFromFolderModal
+    skills={scannedSkills}
+    isImporting={isFolderImporting}
+    onimport={handleFolderImport}
+    onclose={closeFolderImportModal}
+  />
+{/if}
+
+<!-- Delete Confirmation Modal -->
+{#if showDeleteModal && skillToDelete}
+  <ConfirmDeleteModal
+    skillName={skillToDelete.name}
+    onconfirm={confirmDeleteSkill}
+    oncancel={cancelDeleteSkill}
+  />
+{/if}
 
 <!-- Snackbar container -->
 {#if snackbars.length > 0}
@@ -994,28 +1197,43 @@
     color: var(--color-text-dim);
   }
 
-  .add-target-form .form-actions {
+  .add-target-actions {
     display: flex;
     gap: var(--space-2);
     justify-content: flex-end;
   }
 
-  .add-target-form .form-actions button {
-    padding: 6px var(--space-3);
+  .add-target-btn {
+    height: 26px;
+    padding: 0 var(--space-3);
     background: var(--color-surface-hover);
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     color: var(--color-text-secondary);
     font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
   }
 
-  .add-target-form .form-actions button.primary {
+  .add-target-btn:hover:not(:disabled) {
+    background: var(--color-bg);
+  }
+
+  .add-target-btn:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  .add-target-btn.primary {
     background: var(--color-primary);
     color: white;
   }
 
-  .add-target-form .form-actions button:disabled {
+  .add-target-btn.primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  .add-target-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
@@ -1120,9 +1338,13 @@
     padding: var(--space-3);
     border-top: 1px solid var(--color-border);
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
   }
 
-  .sidebar-action {
+  /* Primary Sync Button */
+  .sidebar-action-primary {
     width: 100%;
     padding: 10px var(--space-4);
     background: var(--color-primary);
@@ -1132,56 +1354,91 @@
     font-size: var(--font-sm);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
     transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   }
 
-  .sidebar-action:hover:not(:disabled) {
+  .sidebar-action-primary:hover:not(:disabled) {
     background: var(--color-primary-hover);
     box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
   }
 
-  .sidebar-action:active:not(:disabled) {
+  .sidebar-action-primary:active:not(:disabled) {
     transform: scale(0.98);
   }
 
-  .sidebar-action:disabled {
+  .sidebar-action-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  .sidebar-actions-row {
+  /* Toolbar Container */
+  .sidebar-toolbar {
     display: flex;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
   }
 
-  .sidebar-action-small {
-    flex: 1;
-    padding: 8px;
-    background: var(--color-surface);
-    color: var(--color-text-secondary);
+  .toolbar-group {
+    display: flex;
+    gap: 2px;
+  }
+
+  .toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--color-border);
+    margin: 0 var(--space-1);
+  }
+
+  .toolbar-button {
+    height: 32px;
+    min-width: 32px;
+    padding: 0 var(--space-2);
+    background: transparent;
+    color: var(--color-text-muted);
     border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease;
+    gap: var(--space-1);
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
   }
 
-  .sidebar-action-small:hover:not(:disabled) {
+  .toolbar-button:hover:not(:disabled) {
     background: var(--color-surface-hover);
     color: var(--color-text);
   }
 
-  .sidebar-action-small:active:not(:disabled) {
-    transform: scale(0.92);
+  .toolbar-button:active:not(:disabled) {
+    transform: scale(0.95);
   }
 
-  .sidebar-action-small:disabled {
-    opacity: 0.5;
+  .toolbar-button:disabled {
+    opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  /* Create button with label */
+  .toolbar-button-create {
+    flex: 1;
+    justify-content: center;
+    color: var(--color-text-secondary);
+  }
+
+  .toolbar-button-create:hover:not(:disabled) {
+    background: var(--color-primary-muted);
+    color: var(--color-primary);
   }
 
   /* ============================================
@@ -1441,11 +1698,13 @@
     border-top: 1px solid var(--color-border);
   }
 
-  .form-actions button {
+  .form-btn {
+    height: 32px;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-4);
+    padding: 0 var(--space-4);
     background: var(--color-surface-hover);
     border: none;
     border-radius: var(--radius-md);
@@ -1453,28 +1712,33 @@
     font-size: var(--font-sm);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   }
 
-  .form-actions button:hover:not(:disabled) {
+  .form-btn:hover:not(:disabled) {
     background: var(--color-bg);
   }
 
-  .form-actions button.primary {
+  .form-btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .form-btn.primary {
     background: var(--color-primary);
     color: white;
   }
 
-  .form-actions button.primary:hover:not(:disabled) {
+  .form-btn.primary:hover:not(:disabled) {
     background: var(--color-primary-hover);
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
   }
 
-  .form-actions button:disabled {
+  .form-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
 
-  .form-actions :global(.icon-sm) {
+  .form-btn :global(.icon-sm) {
     width: 14px;
     height: 14px;
   }
@@ -1743,40 +2007,47 @@
 
   .editor-actions {
     display: flex;
+    align-items: center;
     gap: var(--space-2);
     -webkit-app-region: no-drag;
   }
 
-  .editor-actions button {
-    padding: var(--space-1) var(--space-3);
+  .editor-btn {
+    height: 28px;
+    padding: 0 var(--space-3);
     background: var(--color-surface);
     border: none;
     border-radius: var(--radius-md);
     color: var(--color-text-secondary);
     font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
     transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   }
 
-  .editor-actions button.primary {
+  .editor-btn.primary {
     background: var(--color-primary);
     color: white;
+    padding: 0 var(--space-4);
   }
 
-  .editor-actions button:hover:not(:disabled) {
+  .editor-btn:hover:not(:disabled) {
     background: var(--color-surface-hover);
   }
 
-  .editor-actions button.primary:hover:not(:disabled) {
+  .editor-btn.primary:hover:not(:disabled) {
     background: var(--color-primary-hover);
     box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
   }
 
-  .editor-actions button:active:not(:disabled) {
+  .editor-btn:active:not(:disabled) {
     transform: scale(0.96);
   }
 
-  .editor-actions button:disabled {
+  .editor-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
@@ -1944,5 +2215,67 @@
 
   .snackbar-warning {
     border-left: 3px solid var(--color-warning);
+  }
+
+  /* ============================================
+     DROP ZONE OVERLAY
+     ============================================ */
+  .drop-zone-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 132, 255, 0.15);
+    border: 3px dashed var(--color-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: drop-zone-fade-in 0.15s ease-out;
+    pointer-events: none;
+  }
+
+  @keyframes drop-zone-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .drop-zone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-8);
+    background: var(--color-sidebar);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: drop-zone-bounce 0.3s ease-out;
+  }
+
+  @keyframes drop-zone-bounce {
+    0% {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.02);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .drop-zone-content :global(.drop-zone-icon) {
+    color: var(--color-primary);
+  }
+
+  .drop-zone-content p {
+    margin: 0;
+    font-size: var(--font-lg);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
   }
 </style>

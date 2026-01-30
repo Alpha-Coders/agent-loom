@@ -5,11 +5,12 @@
 
 use crate::config::Config;
 use crate::error::{Error, Result};
-use crate::skill::{Skill, SKILL_FILE_NAME};
+use crate::skill::{normalize_frontmatter, to_kebab_case, Skill, SKILL_FILE_NAME};
 use crate::target::{Target, TargetKind};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 /// A skill discovered in a target CLI's skills directory
 #[derive(Debug, Clone, Serialize)]
@@ -38,6 +39,44 @@ pub struct ConflictInfo {
 
     /// Description of the existing skill
     pub existing_description: String,
+}
+
+/// A skill discovered in an external folder (not a target CLI)
+#[derive(Debug, Clone, Serialize)]
+pub struct ScannedSkill {
+    /// Skill name (from frontmatter, normalized to kebab-case)
+    pub name: String,
+
+    /// Skill description (from frontmatter)
+    pub description: String,
+
+    /// Path to the skill directory
+    pub source_path: PathBuf,
+
+    /// Whether the skill has fixable issues
+    pub needs_fixes: bool,
+
+    /// Preview of fixes that will be applied (empty if no fixes needed)
+    pub fixes_preview: Vec<String>,
+
+    /// Conflict information if skill already exists in Talent
+    pub conflict: Option<ConflictInfo>,
+}
+
+/// User's selection for importing a skill from an external folder
+#[derive(Debug, Clone, Deserialize)]
+pub struct FolderImportSelection {
+    /// Skill name (kebab-case, used as folder name in ~/.talent/skills/)
+    pub name: String,
+
+    /// Path to the source skill directory
+    pub source_path: PathBuf,
+
+    /// Whether to apply normalization fixes during import
+    pub apply_fixes: bool,
+
+    /// How to handle conflicts
+    pub resolution: ConflictResolution,
 }
 
 /// User's selection for importing a skill
@@ -207,6 +246,187 @@ impl Importer {
         } else {
             None
         }
+    }
+
+    /// Scan an external folder for skills
+    ///
+    /// Recursively searches for SKILL.md files up to max_depth levels deep.
+    /// Returns information about each discovered skill including normalization preview.
+    pub fn scan_folder(&self, path: &Path) -> Result<Vec<ScannedSkill>> {
+        const MAX_DEPTH: usize = 5;
+
+        if !path.exists() {
+            return Err(Error::io(
+                path,
+                std::io::Error::new(std::io::ErrorKind::NotFound, "Path does not exist"),
+            ));
+        }
+
+        if !path.is_dir() {
+            return Err(Error::io(
+                path,
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, "Path is not a directory"),
+            ));
+        }
+
+        let mut skills = Vec::new();
+
+        for entry in WalkDir::new(path)
+            .max_depth(MAX_DEPTH)
+            .follow_links(false) // Avoid circular symlinks
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let entry_path = entry.path();
+
+            // Look for SKILL.md files
+            if entry_path.file_name().is_some_and(|n| n == SKILL_FILE_NAME) {
+                if let Some(skill_dir) = entry_path.parent() {
+                    // Skip if this is inside our own skills directory
+                    if let (Ok(skill_abs), Ok(talent_abs)) = (
+                        skill_dir.canonicalize(),
+                        self.skills_dir.canonicalize(),
+                    ) {
+                        if skill_abs.starts_with(&talent_abs) {
+                            continue;
+                        }
+                    }
+
+                    if let Some(scanned) = self.scan_single_skill(skill_dir) {
+                        skills.push(scanned);
+                    }
+                }
+            }
+        }
+
+        Ok(skills)
+    }
+
+    /// Scan a single skill directory and return ScannedSkill info
+    fn scan_single_skill(&self, skill_dir: &Path) -> Option<ScannedSkill> {
+        let skill_file = skill_dir.join(SKILL_FILE_NAME);
+        let contents = fs::read_to_string(&skill_file).ok()?;
+
+        let folder_name = skill_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+
+        // Extract frontmatter for normalization check
+        let trimmed = contents.trim_start();
+        let (yaml_content, _body) = if trimmed.starts_with("---") {
+            let after_first = &trimmed[3..];
+            match after_first.find("\n---") {
+                Some(end_idx) => (
+                    after_first[..end_idx].trim().to_string(),
+                    after_first[end_idx + 4..].trim().to_string(),
+                ),
+                None => (String::new(), contents.clone()),
+            }
+        } else {
+            (String::new(), contents.clone())
+        };
+
+        // Run normalization to preview fixes
+        let normalize_result = normalize_frontmatter(&yaml_content, folder_name);
+
+        // Load skill leniently to get metadata
+        let skill = Skill::load_lenient(skill_dir);
+
+        // Determine final name (kebab-case)
+        let name = if normalize_result.was_modified {
+            // Use normalized name from fixes
+            to_kebab_case(&skill.meta.name)
+        } else {
+            skill.meta.name.clone()
+        };
+
+        // Check for conflicts with existing skills
+        let conflict = self.check_conflict(&name);
+
+        Some(ScannedSkill {
+            name,
+            description: skill.meta.description.clone(),
+            source_path: skill_dir.to_path_buf(),
+            needs_fixes: normalize_result.was_modified || !skill.validation_errors.is_empty(),
+            fixes_preview: normalize_result.fixes,
+            conflict,
+        })
+    }
+
+    /// Import a skill from an external folder
+    ///
+    /// Unlike import_skill(), this does NOT remove the source directory.
+    /// Optionally applies normalization fixes during import.
+    pub fn import_from_external(
+        &self,
+        source: &Path,
+        name: &str,
+        apply_fixes: bool,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        let dest = self.skills_dir.join(name);
+
+        if dest.exists() {
+            if !overwrite {
+                return Err(Error::ValidationFailed {
+                    name: name.to_string(),
+                    message: "Skill already exists".to_string(),
+                });
+            }
+            // Remove existing directory
+            fs::remove_dir_all(&dest).map_err(|e| Error::io(&dest, e))?;
+        }
+
+        // Copy the entire directory recursively
+        copy_dir_recursive(source, &dest)?;
+
+        // Optionally apply normalization fixes
+        if apply_fixes {
+            let mut skill = Skill::load_lenient(&dest);
+            let _ = skill.fix_frontmatter();
+        }
+
+        // Note: We do NOT remove the source directory for external imports
+        // This is intentional - external imports are copies, not migrations
+
+        Ok(dest)
+    }
+
+    /// Import multiple skills from external folders based on user selections
+    pub fn import_folder_selections(&self, selections: &[FolderImportSelection]) -> ImportResult {
+        let mut result = ImportResult {
+            imported: Vec::new(),
+            skipped: Vec::new(),
+            errors: Vec::new(),
+            synced_to: 0,
+        };
+
+        for selection in selections {
+            match selection.resolution {
+                ConflictResolution::Skip => {
+                    result.skipped.push(selection.name.clone());
+                }
+                ConflictResolution::Import | ConflictResolution::Overwrite => {
+                    let overwrite = selection.resolution == ConflictResolution::Overwrite;
+                    match self.import_from_external(
+                        &selection.source_path,
+                        &selection.name,
+                        selection.apply_fixes,
+                        overwrite,
+                    ) {
+                        Ok(_) => {
+                            result.imported.push(selection.name.clone());
+                        }
+                        Err(e) => {
+                            result.errors.push((selection.name.clone(), e.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+
+        result
     }
 
     /// Import a single skill
