@@ -729,26 +729,14 @@
 
       <!-- Action Toolbar -->
       <div class="sidebar-toolbar">
-        <!-- Import Group -->
-        <div class="toolbar-group">
-          <button class="toolbar-button" onclick={handleRefresh} disabled={isLoading} title="Refresh skill list">
-            <RotateCcw class="icon" size={14} strokeWidth={1.5} />
-          </button>
-          <button class="toolbar-button" onclick={handleImport} disabled={isImporting} title="Import from targets">
-            <Download class="icon" size={14} strokeWidth={1.5} />
-          </button>
-          <button class="toolbar-button" onclick={handleFolderPickerImport} disabled={isScanning} title="Import from folder">
-            <FolderOpen class="icon" size={14} strokeWidth={1.5} />
-          </button>
-        </div>
-
-        <!-- Divider -->
-        <div class="toolbar-divider"></div>
-
-        <!-- Create Action -->
-        <button class="toolbar-button toolbar-button-create" onclick={() => showNewSkillForm = !showNewSkillForm} title="New skill (⌘N)">
-          <Plus class="icon" size={14} strokeWidth={2} />
-          <span>New</span>
+        <button class="toolbar-button" onclick={handleRefresh} disabled={isLoading} title="Refresh skill list">
+          <RotateCcw class="icon" size={14} strokeWidth={1.5} />
+        </button>
+        <button class="toolbar-button" onclick={handleImport} disabled={isImporting} title="Import from targets">
+          <Download class="icon" size={14} strokeWidth={1.5} />
+        </button>
+        <button class="toolbar-button" onclick={handleFolderPickerImport} disabled={isScanning} title="Import from folder">
+          <FolderOpen class="icon" size={14} strokeWidth={1.5} />
         </button>
       </div>
     </div>
@@ -760,7 +748,10 @@
       <span class="list-title">
         {activeFilter === 'all' ? 'All Skills' : activeFilter === 'valid' ? 'Valid Skills' : 'Invalid Skills'}
       </span>
-      <span class="list-count">{filteredSkills().length}</span>
+      <button class="list-new-skill" onclick={() => showNewSkillForm = true}>
+        <Plus class="icon" size={14} strokeWidth={2} />
+        <span>New Skill</span>
+      </button>
     </div>
 
     {#if error}
@@ -868,11 +859,33 @@
         <div class="loading">Loading...</div>
       {:else if filteredSkills().length === 0}
         <div class="empty-state">
-          <p>No skills found</p>
+          <div class="empty-icon">
+            {#if activeFilter === 'valid'}
+              <span class="empty-icon-symbol valid">●</span>
+            {:else if activeFilter === 'invalid'}
+              <span class="empty-icon-symbol invalid">○</span>
+            {:else}
+              <Sparkles class="empty-icon-sparkle" size={32} strokeWidth={1.5} />
+            {/if}
+          </div>
+          <p class="empty-title">
+            {#if activeFilter === 'valid'}
+              No valid skills
+            {:else if activeFilter === 'invalid'}
+              No invalid skills
+            {:else}
+              No skills yet
+            {/if}
+          </p>
+          <p class="empty-subtitle">
+            {#if activeFilter !== 'all'}
+              Try showing all skills or create a new one
+            {:else}
+              Create your first skill to get started
+            {/if}
+          </p>
           {#if activeFilter !== 'all'}
-            <button onclick={() => activeFilter = 'all'}>Show all</button>
-          {:else}
-            <button onclick={() => showNewSkillForm = true}>Create one</button>
+            <button class="empty-action secondary" onclick={() => activeFilter = 'all'}>Show All Skills</button>
           {/if}
         </div>
       {:else}
@@ -941,13 +954,12 @@
   {:else}
     <div class="editor-placeholder">
       <div class="placeholder-content">
-        <div class="placeholder-icon">◇</div>
-        <p>Select a skill to edit</p>
+        <div class="placeholder-icon-wrapper">
+          <div class="placeholder-icon-bg"></div>
+          <div class="placeholder-icon">◇</div>
+        </div>
+        <p class="placeholder-title">Select a skill to edit</p>
         <p class="placeholder-hint">or press <kbd>⌘N</kbd> to create new</p>
-        <button class="placeholder-action" onclick={() => showNewSkillForm = true}>
-          <Plus class="icon" size={14} strokeWidth={2} />
-          <span>New Skill</span>
-        </button>
       </div>
     </div>
   {/if}
@@ -1416,27 +1428,14 @@
   .sidebar-toolbar {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
     padding: var(--space-1);
     background: var(--color-surface);
     border-radius: var(--radius-md);
   }
 
-  .toolbar-group {
-    display: flex;
-    gap: 2px;
-  }
-
-  .toolbar-divider {
-    width: 1px;
-    height: 20px;
-    background: var(--color-border);
-    margin: 0 var(--space-1);
-  }
-
   .toolbar-button {
+    flex: 1;
     height: 32px;
-    min-width: 32px;
     padding: 0 var(--space-2);
     background: transparent;
     color: var(--color-text-muted);
@@ -1464,18 +1463,6 @@
   .toolbar-button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-  }
-
-  /* Create button with label */
-  .toolbar-button-create {
-    flex: 1;
-    justify-content: center;
-    color: var(--color-text-secondary);
-  }
-
-  .toolbar-button-create:hover:not(:disabled) {
-    background: var(--color-primary-muted);
-    color: var(--color-primary);
   }
 
   /* ============================================
@@ -1514,6 +1501,31 @@
     background: var(--color-surface);
     padding: 2px 8px;
     border-radius: 10px;
+  }
+
+  .list-new-skill {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 6px var(--space-3);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  }
+
+  .list-new-skill:hover {
+    background: var(--color-primary-hover);
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+  }
+
+  .list-new-skill:active {
+    transform: scale(0.97);
   }
 
   .error-banner {
@@ -1820,28 +1832,80 @@
     to { transform: rotate(360deg); }
   }
 
-  .empty-state p {
-    margin: 0;
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8) var(--space-4);
+    flex: 1;
   }
 
-  .empty-state button {
-    margin-top: var(--space-4);
+  .empty-icon {
+    margin-bottom: var(--space-4);
+  }
+
+  .empty-icon-symbol {
+    font-size: 32px;
+    opacity: 0.4;
+  }
+
+  .empty-icon-symbol.valid {
+    color: var(--color-success);
+  }
+
+  .empty-icon-symbol.invalid {
+    color: var(--color-error);
+  }
+
+  .empty-icon :global(.empty-icon-sparkle) {
+    color: var(--color-text-dim);
+    opacity: 0.6;
+  }
+
+  .empty-title {
+    margin: 0;
+    font-size: var(--font-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+  }
+
+  .empty-subtitle {
+    margin: var(--space-2) 0 0 0;
+    font-size: var(--font-xs);
+    color: var(--color-text-dim);
+  }
+
+  .empty-action {
+    margin-top: var(--space-5);
     padding: 10px var(--space-5);
-    background: var(--color-surface);
+    background: var(--color-primary);
     border: none;
     border-radius: var(--radius-md);
-    color: var(--color-text-secondary);
+    color: white;
     font-size: var(--font-sm);
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   }
 
-  .empty-state button:hover {
-    background: var(--color-surface-hover);
+  .empty-action:hover {
+    background: var(--color-primary-hover);
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
   }
 
-  .empty-state button:active {
+  .empty-action:active {
     transform: scale(0.97);
+  }
+
+  .empty-action.secondary {
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+  }
+
+  .empty-action.secondary:hover {
+    background: var(--color-surface-hover);
+    box-shadow: none;
   }
 
   .skill-item {
@@ -2152,56 +2216,61 @@
     color: var(--color-text-dim);
   }
 
-  .placeholder-icon {
-    font-size: 48px;
-    margin-bottom: var(--space-4);
-    opacity: 0.3;
+  .placeholder-icon-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-5);
   }
 
-  .placeholder-content p {
+  .placeholder-icon-bg {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    background: radial-gradient(circle, var(--color-surface) 0%, transparent 70%);
+    border-radius: 50%;
+    opacity: 0.5;
+  }
+
+  .placeholder-icon {
+    position: relative;
+    font-size: 48px;
+    opacity: 0.25;
+    animation: placeholder-float 3s ease-in-out infinite;
+  }
+
+  @keyframes placeholder-float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+
+  .placeholder-title {
     margin: 0;
-    font-size: var(--font-sm);
+    font-size: var(--font-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-muted);
   }
 
   .placeholder-hint {
-    margin-top: var(--space-2) !important;
-    font-size: var(--font-xs) !important;
+    margin: var(--space-2) 0 0 0;
+    font-size: var(--font-xs);
     color: var(--color-text-dim);
   }
 
   .placeholder-hint kbd {
     display: inline-block;
-    padding: 2px 6px;
+    padding: 3px 8px;
     background: var(--color-surface);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     font-family: inherit;
     font-size: var(--font-xs);
-  }
-
-  .placeholder-action {
-    margin-top: var(--space-5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    padding: 10px var(--space-5);
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  }
-
-  .placeholder-action:hover {
-    background: var(--color-primary-hover);
-    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
-  }
-
-  .placeholder-action:active {
-    transform: scale(0.97);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   /* ============================================
