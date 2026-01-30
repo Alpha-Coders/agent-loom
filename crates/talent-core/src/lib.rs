@@ -23,7 +23,10 @@ pub use importer::{
     ImportResult, ImportSelection, Importer,
 };
 pub use manager::{ManagerStats, SkillManager};
-pub use skill::{discover_skills, Skill, SkillMeta, ValidationStatus, SKILL_FILE_NAME};
+pub use skill::{
+    discover_skills, normalize_frontmatter, NormalizeResult, Skill, SkillMeta, ValidationStatus,
+    SKILL_FILE_NAME,
+};
 pub use syncer::{SyncError, SyncResult, Syncer};
 pub use target::{Target, TargetInfo, TargetKind};
 pub use validator::Validator;

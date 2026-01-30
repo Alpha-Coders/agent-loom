@@ -43,6 +43,14 @@ impl Validator {
 
     /// Validate a skill, updating its validation status
     pub fn validate(&self, skill: &mut Skill) -> Result<()> {
+        // Preserve any loading errors (these indicate frontmatter issues)
+        let loading_errors: Vec<String> = skill
+            .validation_errors
+            .iter()
+            .filter(|e| e.contains("frontmatter") || e.contains("auto-fixed"))
+            .cloned()
+            .collect();
+
         let mut errors = Vec::new();
 
         // Check required fields
@@ -102,17 +110,24 @@ impl Validator {
             errors.push("skill must have content".to_string());
         }
 
+        // Combine loading errors with validation errors
+        let all_errors: Vec<String> = loading_errors
+            .into_iter()
+            .chain(errors.into_iter())
+            .collect();
+
         // Update skill status
-        if errors.is_empty() {
+        if all_errors.is_empty() {
             skill.validation_status = ValidationStatus::Valid;
             skill.validation_errors.clear();
             Ok(())
         } else {
             skill.validation_status = ValidationStatus::Invalid;
-            skill.validation_errors = errors.clone();
+            let message = all_errors.join("; ");
+            skill.validation_errors = all_errors;
             Err(Error::ValidationFailed {
                 name: skill.meta.name.clone(),
-                message: errors.join("; "),
+                message,
             })
         }
     }

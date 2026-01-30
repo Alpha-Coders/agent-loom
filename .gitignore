@@ -6,7 +6,10 @@ Cargo.lock
 # Node
 node_modules/
 dist/
+
+# macOS
 .DS_Store
+.nosync
 
 # Tauri
 src-tauri/target/
@@ -33,3 +36,4 @@ npm-debug.log*
 *.msi
 *.deb
 *.AppImage
+.iconsignature

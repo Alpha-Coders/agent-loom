@@ -4,6 +4,7 @@
 //! to the Svelte frontend.
 
 mod commands;
+mod menu;
 mod tray;
 
 use serde::{Deserialize, Serialize};
@@ -146,10 +147,14 @@ pub fn run() {
             manager: Mutex::new(manager),
         })
         .setup(|app| {
+            // Create and set application menu
+            let menu = menu::create_menu(app.handle())?;
+            app.set_menu(menu)?;
+
             // Initialize system tray
             tray::create_tray(app.handle())?;
 
-            // Set up close-to-tray behavior for main window
+            // Set up close-to-tray behavior for main window (Cmd+W hides, Cmd+Q quits)
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
                 window.on_window_event(move |event| {
@@ -162,6 +167,9 @@ pub fn run() {
             }
 
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            menu::handle_menu_event(app, &event);
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_skills,
@@ -181,6 +189,9 @@ pub fn run() {
             commands::import_all_skills,
             commands::is_filemerge_available,
             commands::launch_filemerge,
+            // Skill fixing
+            commands::fix_skill,
+            commands::fix_all_skills,
             // Target management
             commands::toggle_target,
             commands::set_target_enabled,
