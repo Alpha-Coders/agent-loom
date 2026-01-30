@@ -184,8 +184,14 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          EXE=$(find src-tauri/target -name "*.exe" -path "*/release/bundle/*" | head -1)
-          NEW_NAME="Talent-${VERSION}-windows-x64.exe"
+          # Find the NSIS installer (named *-setup.exe or *_setup.exe)
+          EXE=$(find src-tauri/target -name "*setup*.exe" -path "*/release/bundle/nsis/*" | head -1)
+          if [ -z "$EXE" ]; then
+            echo "Error: Could not find NSIS installer"
+            find src-tauri/target -name "*.exe" -path "*/release/bundle/*" || true
+            exit 1
+          fi
+          NEW_NAME="Talent-${VERSION}-windows-x64-setup.exe"
 
           cp "$EXE" "$NEW_NAME"
           echo "artifact_name=${NEW_NAME}" >> $GITHUB_ENV
@@ -274,7 +280,7 @@ jobs:
             | macOS | Apple Silicon (M1/M2) | `Talent-${{ steps.release_info.outputs.version }}-macos-arm64.zip` |
             | macOS | Intel | `Talent-${{ steps.release_info.outputs.version }}-macos-x64.zip` |
             | Linux | x64 | `Talent-${{ steps.release_info.outputs.version }}-linux-x64.AppImage` |
-            | Windows | x64 | `Talent-${{ steps.release_info.outputs.version }}-windows-x64.exe` |
+            | Windows | x64 | `Talent-${{ steps.release_info.outputs.version }}-windows-x64-setup.exe` |
 
             ### Installation
 
@@ -282,7 +288,7 @@ jobs:
 
             **Linux:** Make the AppImage executable (`chmod +x *.AppImage`) and run it.
 
-            **Windows:** Run the `.exe` file directly (portable, no installation required).
+            **Windows:** Run the setup installer and follow the prompts.
 
             ### Checksums
 
