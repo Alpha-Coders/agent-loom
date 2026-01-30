@@ -378,7 +378,7 @@
       scannedSkills = results;
 
       if (results.length === 0) {
-        showSnackbar('No skills found in folder', 'info');
+        showSnackbar('No skills found in folder', 'warning');
       } else {
         showFolderImportModal = true;
       }
