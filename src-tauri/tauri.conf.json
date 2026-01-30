@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Talent",
+  "productName": "Agent Skills Manager",
   "version": "0.1.0",
-  "identifier": "com.talent.app",
+  "identifier": "com.agentskillsmanager.app",
   "build": {
     "beforeDevCommand": "npm run dev:vite",
     "devUrl": "http://localhost:5173",
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Talent - Skills Manager",
+        "title": "Agent Skills Manager",
         "width": 1280,
         "height": 720,
         "minWidth": 1240,

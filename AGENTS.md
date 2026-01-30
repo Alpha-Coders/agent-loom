@@ -24,7 +24,7 @@ Load `agents/core.md` plus your project's language overlay:
 ## File Structure
 
 ```
-talent/
+agent-skills-manager/
 ├── AGENTS.md               # This file (entry point, source of truth)
 ├── CLAUDE.md -> AGENTS.md  # Symlink for Claude Code
 ├── .claude/
@@ -38,9 +38,9 @@ talent/
 │   └── TEMPLATE.md         # Plan format template
 ├── Cargo.toml              # Rust workspace config
 ├── crates/                 # Rust crates
-│   ├── talent-core/        # Core library
-│   └── talent-cli/         # CLI application
-├── src-tauri/              # Tauri backend
+│   ├── talent-core/        # Core library (asm-core)
+│   └── talent-cli/         # CLI application (asm-cli)
+├── src-tauri/              # Tauri backend (asm-app)
 ├── src/                    # Svelte frontend
 └── package.json            # Frontend dependencies
 ```
@@ -130,7 +130,7 @@ When asked to commit and push:
 |---------|-------------|
 | `cargo build` | Build all Rust crates |
 | `cargo test` | Run Rust tests |
-| `cargo test -p talent-core` | Run core library tests only |
+| `cargo test -p asm-core` | Run core library tests only |
 | `cargo clippy` | Lint Rust code |
 | `cargo fmt` | Format Rust code |
 | `npm install` | Install frontend dependencies |
@@ -139,11 +139,11 @@ When asked to commit and push:
 
 ### Project Overview
 
-**Talent** is a cross-platform GUI application for managing Agent Skills across multiple AI CLI tools:
-- Central skill storage in `~/.talent/skills/`
+**Agent Skills Manager (ASM)** is a cross-platform GUI application for managing Agent Skills across multiple AI CLI tools:
+- Central skill storage in `~/.agentskills/skills/`
 - Symlink syncing to: Claude Code, Codex, Gemini, Cursor, Amp, Goose
 - Validation engine for skill quality
-- File watching for auto-sync
+- Built-in markdown editor
 
 ### Tech Stack
 
@@ -157,4 +157,4 @@ When asked to commit and push:
 
 ### Current Implementation Status
 
-Check `docs/plans/2026-01-29-talent-implementation.md` for the 13-task MVP plan.
+Check `plans/` directory for implementation plans.

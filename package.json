@@ -1,8 +1,12 @@
 {
-  "name": "talent",
+  "name": "agent-skills-manager",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Alpha-Coders/agent-skills-manager.git"
+  },
   "scripts": {
     "dev": "node scripts/dev.js",
     "dev:vite": "vite",

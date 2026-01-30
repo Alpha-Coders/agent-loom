@@ -5,7 +5,7 @@ use crate::{
     ScannedSkillInfo, SkillInfo, StatsInfo,
 };
 use std::path::PathBuf;
-use talent_core::{check_filemerge_available, open_filemerge, Importer, SyncResult, TargetInfo};
+use asm_core::{check_filemerge_available, open_filemerge, Importer, SyncResult, TargetInfo};
 
 /// Get all skills
 #[tauri::command]
@@ -196,7 +196,7 @@ pub fn import_all_skills(state: tauri::State<'_, AppState>) -> Result<ImportResu
     }
 
     // Import all with overwrite enabled
-    let mut result = talent_core::ImportResult {
+    let mut result = asm_core::ImportResult {
         imported: Vec::new(),
         skipped: Vec::new(),
         errors: Vec::new(),
@@ -288,7 +288,7 @@ pub fn remove_custom_target(
 /// Get available target types that can be added
 #[tauri::command]
 pub fn get_available_target_types(state: tauri::State<'_, AppState>) -> Result<Vec<(String, String)>, String> {
-    use talent_core::TargetKind;
+    use asm_core::TargetKind;
 
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
     let existing_ids: Vec<_> = manager.targets().iter().map(|t| t.id().to_string()).collect();

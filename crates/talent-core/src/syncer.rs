@@ -1,7 +1,7 @@
 //! Symlink synchronization for skills
 //!
-//! Creates symlinks from target CLI skills directories to the central Talent skills storage.
-//! For example: `~/.claude/commands/my-skill` -> `~/.talent/skills/my-skill`
+//! Creates symlinks from target CLI skills directories to the central skills storage.
+//! For example: `~/.claude/commands/my-skill` -> `~/.agentskills/skills/my-skill`
 
 use crate::error::{Error, Result};
 use crate::skill::Skill;
