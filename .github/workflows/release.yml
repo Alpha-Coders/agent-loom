@@ -10,12 +10,57 @@ on:
         description: 'Version override (e.g., 0.1.0-beta.1)'
         required: false
         type: string
+      skip_validation:
+        description: 'Skip validation checks (clippy, tests)'
+        required: false
+        type: boolean
+        default: false
+
+# Minimal permissions by default
+permissions:
+  contents: read
+
+# Cancel in-progress runs for the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
+  # Validation job - runs before building
+  validate:
+    if: ${{ !inputs.skip_validation }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: validate
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace
+
   build:
+    needs: [validate]
+    # Run even if validate was skipped
+    if: ${{ always() && (needs.validate.result == 'success' || needs.validate.result == 'skipped') }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +79,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -50,16 +96,19 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: build-${{ matrix.target }}
+          # Cache the target directory for faster builds
+          cache-targets: true
+
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.0
 
       - name: Install npm dependencies
         run: npm ci
@@ -141,10 +190,12 @@ jobs:
           name: Talent-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ env.artifact_name }}
           if-no-files-found: error
+          retention-days: 7
 
   release:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
 
@@ -198,12 +249,13 @@ jobs:
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_info.outputs.tag }}
           name: Talent ${{ steps.release_info.outputs.version }}
           draft: ${{ steps.release_info.outputs.draft }}
           prerelease: ${{ steps.release_info.outputs.prerelease }}
+          generate_release_notes: true
           files: |
             artifacts/*
           body: |
