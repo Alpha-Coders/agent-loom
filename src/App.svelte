@@ -7,7 +7,7 @@
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
-  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen } from 'lucide-svelte';
+  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine } from 'lucide-svelte';
 
   // State using Svelte 5 runes
   let skills = $state<SkillInfo[]>([]);
@@ -946,12 +946,9 @@
   {:else}
     <div class="editor-placeholder">
       <div class="placeholder-content">
-        <div class="placeholder-icon-wrapper">
-          <div class="placeholder-icon-bg"></div>
-          <div class="placeholder-icon">◇</div>
-        </div>
-        <p class="placeholder-title">Select a skill to edit</p>
-        <p class="placeholder-hint">or press <kbd>⌘N</kbd> to create new</p>
+        <FilePenLine class="placeholder-icon" size={48} strokeWidth={1} />
+        <p class="placeholder-title">No Selection</p>
+        <p class="placeholder-hint">Select a skill to edit</p>
       </div>
     </div>
   {/if}
@@ -2197,64 +2194,25 @@
 
   .placeholder-content {
     text-align: center;
+  }
+
+  .placeholder-content :global(.placeholder-icon) {
     color: var(--color-text-dim);
-  }
-
-  .placeholder-icon-wrapper {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: var(--space-5);
-  }
-
-  .placeholder-icon-bg {
-    position: absolute;
-    width: 80px;
-    height: 80px;
-    background: radial-gradient(circle, var(--color-surface) 0%, transparent 70%);
-    border-radius: 50%;
-    opacity: 0.5;
-  }
-
-  .placeholder-icon {
-    position: relative;
-    font-size: 48px;
-    opacity: 0.25;
-    animation: placeholder-float 3s ease-in-out infinite;
-  }
-
-  @keyframes placeholder-float {
-    0%, 100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-6px);
-    }
+    opacity: 0.4;
+    margin-bottom: var(--space-4);
   }
 
   .placeholder-title {
     margin: 0;
-    font-size: var(--font-base);
-    font-weight: var(--font-weight-medium);
+    font-size: var(--font-lg);
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text-muted);
   }
 
   .placeholder-hint {
-    margin: var(--space-2) 0 0 0;
-    font-size: var(--font-xs);
+    margin: var(--space-1) 0 0 0;
+    font-size: var(--font-sm);
     color: var(--color-text-dim);
-  }
-
-  .placeholder-hint kbd {
-    display: inline-block;
-    padding: 3px 8px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    font-family: inherit;
-    font-size: var(--font-xs);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   /* ============================================
