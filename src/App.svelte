@@ -2,12 +2,31 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder } from './lib/api';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, addFolderTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
-  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine } from 'lucide-svelte';
+  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Sun, Moon, Monitor } from 'lucide-svelte';
+
+  // Theme state
+  type ThemeMode = 'system' | 'light' | 'dark';
+  let themeMode = $state<ThemeMode>('system');
+  let systemPrefersDark = $state(true);
+  let resolvedTheme = $derived(themeMode === 'system' ? (systemPrefersDark ? 'dark' : 'light') : themeMode);
+
+  // Apply theme to document
+  $effect(() => {
+    document.documentElement.setAttribute('data-theme', resolvedTheme);
+  });
+
+  function cycleTheme() {
+    const modes: ThemeMode[] = ['system', 'light', 'dark'];
+    const currentIndex = modes.indexOf(themeMode);
+    themeMode = modes[(currentIndex + 1) % modes.length];
+    localStorage.setItem('theme', themeMode);
+  }
 
   // State using Svelte 5 runes
   let skills = $state<SkillInfo[]>([]);
@@ -37,13 +56,6 @@
   let isFolderImporting = $state(false);
 
 
-  // Add target state
-  let showAddTargetForm = $state(false);
-  let availableTargetTypes = $state<[string, string][]>([]);
-  let selectedTargetType = $state('');
-  let customTargetPath = $state('');
-
-
   // Editor state
   let editingSkill = $state<SkillInfo | null>(null);
   let editorContent = $state('');
@@ -51,31 +63,95 @@
   let isSaving = $state(false);
   let isFixing = $state(false);
 
+  // Context menu state
+  interface ContextMenuItem {
+    label: string;
+    action: () => void;
+    destructive?: boolean;
+    disabled?: boolean;
+  }
+  interface ContextMenu {
+    x: number;
+    y: number;
+    items: ContextMenuItem[];
+  }
+  let contextMenu = $state<ContextMenu | null>(null);
+
+  function showContextMenu(event: MouseEvent, items: ContextMenuItem[]) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Calculate position, ensuring menu stays within viewport
+    let x = event.clientX;
+    let y = event.clientY;
+
+    // Approximate menu dimensions for boundary check
+    const menuWidth = 180;
+    const menuHeight = items.length * 36 + 8;
+
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 8;
+    }
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 8;
+    }
+
+    contextMenu = { x, y, items };
+  }
+
+  function hideContextMenu() {
+    contextMenu = null;
+  }
+
   // Snackbar/toast state
   interface Snackbar {
     id: number;
     message: string;
-    type: 'success' | 'info' | 'warning';
+    type: 'success' | 'info' | 'warning' | 'error';
   }
   let snackbars = $state<Snackbar[]>([]);
   let snackbarId = 0;
 
-  function showSnackbar(message: string, type: 'success' | 'info' | 'warning' = 'success', duration = 3000) {
+  function showSnackbar(message: string, type: 'success' | 'info' | 'warning' | 'error' = 'success', duration = 3000) {
     const id = ++snackbarId;
     snackbars = [...snackbars, { id, message, type }];
 
-    setTimeout(() => {
-      snackbars = snackbars.filter(s => s.id !== id);
-    }, duration);
+    // Only auto-dismiss success and info; warnings and errors require manual dismissal
+    if (type === 'success' || type === 'info') {
+      setTimeout(() => {
+        snackbars = snackbars.filter(s => s.id !== id);
+      }, duration);
+    }
   }
 
   function dismissSnackbar(id: number) {
     snackbars = snackbars.filter(s => s.id !== id);
   }
 
+  function formatSyncMessage(created: number, removed: number): string {
+    if (created === 0 && removed === 0) {
+      return 'All targets up to date';
+    }
+    if (created > 0 && removed === 0) {
+      return `Added ${created} skill${created === 1 ? '' : 's'} to targets`;
+    }
+    if (created === 0 && removed > 0) {
+      return `Removed ${removed} skill${removed === 1 ? '' : 's'} from targets`;
+    }
+    return `Added ${created}, removed ${removed} skill${created + removed === 1 ? '' : 's'}`;
+  }
+
   let hasUnsavedChanges = $derived(editorContent !== originalContent);
   let hasNewSkillFormInput = $derived(newSkillName.trim() !== '' || newSkillDescription.trim() !== '');
   let hasAnyUnsavedWork = $derived(hasUnsavedChanges || (showNewSkillForm && hasNewSkillFormInput));
+
+  // Show errors as snackbars
+  $effect(() => {
+    if (error) {
+      showSnackbar(error, 'error');
+      error = null;
+    }
+  });
 
   // Menu event handler - always enabled, checks state when called
   function handleMenuSave() {
@@ -129,7 +205,7 @@
       } else {
         // Show auto-dismissing snackbar for success
         lastSyncResults = [];
-        showSnackbar(`Synced: +${totalCreated} -${totalRemoved}`, 'success');
+        showSnackbar(formatSyncMessage(totalCreated, totalRemoved), 'success');
       }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -279,7 +355,14 @@
       }
 
       stats = await getStats();
-      showSnackbar('Saved', 'success');
+
+      // Show feedback based on validation state
+      if (validatedSkill.validation_status === 'invalid') {
+        const errorCount = validatedSkill.validation_errors.length;
+        showSnackbar(`Saved with ${errorCount} validation error${errorCount === 1 ? '' : 's'}`, 'warning');
+      } else {
+        showSnackbar('Saved', 'success');
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
       await loadData();
@@ -430,65 +513,14 @@
     scannedSkills = [];
   }
 
-  // === Drag and Drop Handlers ===
+  // === Drag and Drop Handlers (using Tauri native API) ===
 
-  let dragCounter = 0;
+  async function handleFileDrop(paths: string[]) {
+    if (paths.length === 0) return;
 
-  function handleDragEnter(event: DragEvent) {
-    event.preventDefault();
-    dragCounter++;
-    if (event.dataTransfer?.types.includes('Files')) {
-      isDragging = true;
-    }
-  }
-
-  function handleDragLeave(event: DragEvent) {
-    event.preventDefault();
-    dragCounter--;
-    if (dragCounter === 0) {
-      isDragging = false;
-    }
-  }
-
-  function handleDragOver(event: DragEvent) {
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'copy';
-    }
-  }
-
-  async function handleDrop(event: DragEvent) {
-    event.preventDefault();
-    isDragging = false;
-    dragCounter = 0;
-
-    const items = event.dataTransfer?.items;
-    if (!items || items.length === 0) return;
-
-    // Get the first dropped item
-    const item = items[0];
-    if (item.kind !== 'file') return;
-
-    const entry = item.webkitGetAsEntry?.();
-    if (!entry || !entry.isDirectory) {
-      showSnackbar('Please drop a folder, not a file', 'warning');
-      return;
-    }
-
-    // For Tauri, we need to get the path from the file
-    // The drag event in Tauri gives us the paths differently
-    const files = event.dataTransfer?.files;
-    if (files && files.length > 0) {
-      // In Tauri, the path is available via the webkitRelativePath or we need to use the Tauri API
-      // For now, use the folder picker as fallback
-      const filePath = (files[0] as any).path;
-      if (filePath) {
-        await scanAndShowModal(filePath);
-      } else {
-        // Fallback: open folder picker
-        handleFolderPickerImport();
-      }
-    }
+    // Use the first dropped path
+    const folderPath = paths[0];
+    await scanAndShowModal(folderPath);
   }
 
   // Target management
@@ -504,51 +536,67 @@
     }
   }
 
-  // Finder integration
-  async function handleRevealSkill(skill: SkillInfo, event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    try {
-      await revealInFinder(skill.path);
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    }
+  // Context menu handlers
+  function handleSkillContextMenu(skill: SkillInfo, event: MouseEvent) {
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Edit',
+        action: () => handleEditSkill(skill),
+      },
+      {
+        label: 'Reveal in Finder',
+        action: async () => {
+          try {
+            await revealInFinder(skill.path);
+          } catch (e) {
+            error = e instanceof Error ? e.message : String(e);
+          }
+        },
+      },
+      {
+        label: 'Delete',
+        action: () => handleDeleteSkill(skill, event),
+        destructive: true,
+      },
+    ];
+    showContextMenu(event, items);
   }
 
-  async function handleRevealTarget(target: TargetInfo, event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    try {
-      await revealInFinder(target.skills_path);
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    }
+  function handleTargetContextMenu(target: TargetInfo, event: MouseEvent) {
+    const items: ContextMenuItem[] = [
+      {
+        label: target.enabled ? 'Disable' : 'Enable',
+        action: () => handleToggleTarget(target.id),
+      },
+      {
+        label: 'Reveal in Finder',
+        action: async () => {
+          try {
+            await revealInFinder(target.skills_path);
+          } catch (e) {
+            error = e instanceof Error ? e.message : String(e);
+          }
+        },
+      },
+    ];
+    showContextMenu(event, items);
   }
 
-  async function handleShowAddTarget() {
+  async function handleAddFolderTarget() {
     try {
-      availableTargetTypes = await getAvailableTargetTypes();
-      if (availableTargetTypes.length > 0) {
-        selectedTargetType = availableTargetTypes[0][0];
+      const selected = await openDialog({
+        directory: true,
+        multiple: false,
+        title: 'Select folder to sync skills to',
+      });
+
+      if (selected && typeof selected === 'string') {
+        error = null;
+        const newTarget = await addFolderTarget(selected);
+        targets = await getTargets();
+        stats = await getStats();
+        showSnackbar(`Added "${newTarget.name}"`, 'success');
       }
-      customTargetPath = '';
-      showAddTargetForm = true;
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    }
-  }
-
-  async function handleAddTarget() {
-    if (!selectedTargetType || !customTargetPath.trim()) return;
-
-    try {
-      error = null;
-      await addCustomTarget(selectedTargetType, customTargetPath.trim());
-      targets = await getTargets();
-      stats = await getStats();
-      showAddTargetForm = false;
-      selectedTargetType = '';
-      customTargetPath = '';
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -572,7 +620,9 @@
 
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (showNewSkillForm) {
+      if (contextMenu) {
+        hideContextMenu();
+      } else if (showNewSkillForm) {
         handleCloseNewSkillForm();
       } else if (editingSkill) {
         handleCloseEditor();
@@ -588,6 +638,21 @@
   }
 
   onMount(async () => {
+    // Initialize theme from localStorage
+    const savedTheme = localStorage.getItem('theme') as ThemeMode | null;
+    if (savedTheme && ['system', 'light', 'dark'].includes(savedTheme)) {
+      themeMode = savedTheme;
+    }
+
+    // Detect system preference
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    systemPrefersDark = mediaQuery.matches;
+    const handleChange = (e: MediaQueryListEvent) => {
+      systemPrefersDark = e.matches;
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    unlistenFns.push(() => mediaQuery.removeEventListener('change', handleChange));
+
     loadData();
 
     // Listen for menu events
@@ -604,6 +669,19 @@
     }));
 
     unlistenFns.push(await listen('menu-save', handleMenuSave));
+
+    // Listen for native file drag-drop events from OS (Finder, etc.)
+    const webview = getCurrentWebview();
+    unlistenFns.push(await webview.onDragDropEvent((event) => {
+      if (event.payload.type === 'enter' || event.payload.type === 'over') {
+        isDragging = true;
+      } else if (event.payload.type === 'leave') {
+        isDragging = false;
+      } else if (event.payload.type === 'drop') {
+        isDragging = false;
+        handleFileDrop(event.payload.paths);
+      }
+    }));
 
     // Handle window close with unsaved changes confirmation
     const currentWindow = getCurrentWindow();
@@ -634,19 +712,17 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="app-container"
-  ondragenter={handleDragEnter}
-  ondragleave={handleDragLeave}
-  ondragover={handleDragOver}
-  ondrop={handleDrop}
   role="application"
 >
   <!-- Pane 1: Targets -->
   <aside class="targets-pane">
     <div class="pane-header">
       <span class="pane-title">Targets</span>
-      <button class="pane-action" onclick={handleShowAddTarget} title="Add target">
-        <Plus class="icon" size={16} strokeWidth={1.5} />
-      </button>
+      <div class="pane-actions">
+        <button class="pane-action" onclick={handleAddFolderTarget} title="Add folder as target">
+          <Plus class="icon" size={16} strokeWidth={1.5} />
+        </button>
+      </div>
     </div>
 
     <div class="targets-toolbar">
@@ -659,44 +735,36 @@
     </div>
 
     <div class="targets-content">
-      {#if showAddTargetForm}
-        <div class="add-target-form">
-          <select bind:value={selectedTargetType}>
-            {#each availableTargetTypes as [id, name]}
-              <option value={id}>{name}</option>
-            {/each}
-          </select>
-          <input
-            type="text"
-            placeholder="Skills path..."
-            bind:value={customTargetPath}
-            autocorrect="off"
-            autocapitalize="off"
-          />
-          <div class="add-target-actions">
-            <button class="add-target-btn" onclick={() => showAddTargetForm = false}>Cancel</button>
-            <button class="add-target-btn primary" onclick={handleAddTarget} disabled={!selectedTargetType || !customTargetPath.trim()}>
-              Add
-            </button>
-          </div>
-        </div>
-      {/if}
-
       <div class="targets-list">
         {#each targets as target}
+          {@const syncStatus = target.sync_status}
+          {@const isOutOfSync = syncStatus && !syncStatus.is_synced}
+          {@const syncIssues = isOutOfSync ? [
+            ...syncStatus.missing_skills.length ? [`${syncStatus.missing_skills.length} missing`] : [],
+            ...syncStatus.extra_items.length ? [`${syncStatus.extra_items.length} unmanaged`] : [],
+            ...syncStatus.broken_links.length ? [`${syncStatus.broken_links.length} broken`] : []
+          ].join(', ') : ''}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             class="target-item"
             class:disabled={!target.enabled}
             onclick={() => handleToggleTarget(target.id)}
-            oncontextmenu={(e) => handleRevealTarget(target, e)}
-            title={target.enabled ? 'Click to disable • Right-click to reveal' : 'Click to enable • Right-click to reveal'}
+            oncontextmenu={(e) => handleTargetContextMenu(target, e)}
+            title={target.enabled
+              ? isOutOfSync
+                ? `Out of sync: ${syncIssues}\nClick to disable • Right-click for options`
+                : 'Synced • Click to disable • Right-click for options'
+              : 'Click to enable • Right-click for options'}
           >
             <span class="target-icon">{target.enabled ? '◉' : '○'}</span>
             <span class="target-name">{target.name}</span>
             {#if target.enabled && target.exists}
-              <span class="target-ready">✓</span>
+              {#if isOutOfSync}
+                <span class="target-warning" title="Out of sync: {syncIssues}">●</span>
+              {:else}
+                <span class="target-ready">✓</span>
+              {/if}
             {/if}
           </div>
         {/each}
@@ -704,6 +772,21 @@
           <div class="targets-empty">No targets detected</div>
         {/if}
       </div>
+    </div>
+
+    <div class="targets-footer">
+      <button class="theme-toggle" onclick={cycleTheme} title="Color scheme">
+        {#if themeMode === 'system'}
+          <Monitor class="icon" size={14} strokeWidth={1.5} />
+          <span>System</span>
+        {:else if themeMode === 'light'}
+          <Sun class="icon" size={14} strokeWidth={1.5} />
+          <span>Light</span>
+        {:else}
+          <Moon class="icon" size={14} strokeWidth={1.5} />
+          <span>Dark</span>
+        {/if}
+      </button>
     </div>
   </aside>
 
@@ -727,15 +810,6 @@
     </div>
 
     <div class="skills-content">
-      {#if error}
-        <div class="banner banner-error">
-          <span>{error}</span>
-          <button onclick={() => error = null} aria-label="Dismiss error">
-            <X class="icon" size={16} strokeWidth={1.5} />
-          </button>
-        </div>
-      {/if}
-
       {#if lastSyncResults.length > 0}
         {@const totalCreated = lastSyncResults.reduce((sum, r) => sum + r.created.length, 0)}
         {@const totalRemoved = lastSyncResults.reduce((sum, r) => sum + r.removed.length, 0)}
@@ -745,8 +819,8 @@
           <div class="banner-content">
             <span>
               {#if totalErrors > 0}⚠{:else}✓{/if}
-              Synced: +{totalCreated} -{totalRemoved}
-              {#if totalErrors > 0}({totalErrors} errors){/if}
+              {formatSyncMessage(totalCreated, totalRemoved)}
+              {#if totalErrors > 0} ({totalErrors} error{totalErrors === 1 ? '' : 's'}){/if}
             </span>
             {#if totalErrors > 0}
               <div class="banner-details">
@@ -793,8 +867,8 @@
               class="skill-item"
               class:selected={editingSkill?.folder_name === skill.folder_name}
               onclick={() => handleEditSkill(skill)}
-              oncontextmenu={(e) => handleRevealSkill(skill, e)}
-              title="Click to edit • Right-click to reveal in Finder"
+              oncontextmenu={(e) => handleSkillContextMenu(skill, e)}
+              title="Click to edit • Right-click for options"
             >
               <div class="skill-status">
                 <span class="status-dot" class:valid={skill.validation_status === 'valid'} class:invalid={skill.validation_status === 'invalid'}></span>
@@ -804,7 +878,7 @@
                 <div class="skill-description">{skill.description}</div>
               </div>
               <button class="skill-delete" onclick={(e) => handleDeleteSkill(skill, e)} title="Delete skill">
-                <Trash2 class="icon" size={14} strokeWidth={1.5} />
+                <Trash2 class="icon" size={16} strokeWidth={1.5} />
               </button>
             </div>
           {/each}
@@ -875,24 +949,25 @@
             <input
               id="skill-name"
               type="text"
-              placeholder="my-awesome-skill"
+              placeholder="pdf-processing"
               bind:value={newSkillName}
               autofocus
               autocapitalize="off"
               spellcheck="false"
             />
-            {#if newSkillName.trim()}
-              <div class="field-hint">
-                Will create: <code>~/.talent/skills/{newSkillName.trim().toLowerCase().replace(/\s+/g, '-')}/</code>
-              </div>
-            {/if}
+            <div class="field-hint">
+              Lowercase letters, numbers, and hyphens only.
+              {#if newSkillName.trim()}
+                <br />Creates: <code>~/.agentskills/skills/{newSkillName.trim().toLowerCase().replace(/\s+/g, '-')}/</code>
+              {/if}
+            </div>
           </div>
 
           <div class="form-field">
             <label for="skill-description">Description</label>
             <textarea
               id="skill-description"
-              placeholder="What does this skill do?"
+              placeholder="Describe what the skill does and when to use it. Include keywords that help agents identify relevant tasks."
               bind:value={newSkillDescription}
               rows="3"
               autocapitalize="off"
@@ -917,12 +992,13 @@
   </div>
 </div>
 
-<!-- Drop Zone Overlay -->
+<!-- Drop Zone Overlay (full window) -->
 {#if isDragging}
   <div class="drop-zone-overlay">
     <div class="drop-zone-content">
       <FolderOpen class="drop-zone-icon" size={48} strokeWidth={1.5} />
-      <p>Drop folder to import skills</p>
+      <p class="drop-zone-title">Drop Skill Folders</p>
+      <p class="drop-zone-hint">Import skills from a folder</p>
     </div>
   </div>
 {/if}
@@ -937,6 +1013,27 @@
   />
 {/if}
 
+<!-- Context Menu -->
+{#if contextMenu}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="context-menu-backdrop" onclick={hideContextMenu}></div>
+  <div
+    class="context-menu"
+    style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+  >
+    {#each contextMenu.items as item}
+      <button
+        class="context-menu-item"
+        class:destructive={item.destructive}
+        disabled={item.disabled}
+        onclick={() => { item.action(); hideContextMenu(); }}
+      >
+        {item.label}
+      </button>
+    {/each}
+  </div>
+{/if}
 
 <!-- Snackbar container -->
 {#if snackbars.length > 0}
@@ -985,7 +1082,16 @@
     --radius-md: 6px;
     --radius-lg: 8px;
 
-    /* Colors - Native macOS dark theme */
+    /* Layout - 3 Pane */
+    --targets-pane-width: 180px;
+    --skills-pane-width: 280px;
+    --editor-min-width: 720px;
+  }
+
+  /* ============================================
+     THEME: DARK (Default)
+     ============================================ */
+  :root, :root[data-theme="dark"] {
     --color-bg: #1c1c1e;
     --color-sidebar: #2c2c2e;
     --color-surface: #3a3a3c;
@@ -997,7 +1103,6 @@
     --color-text-muted: rgba(255, 255, 255, 0.55);
     --color-text-dim: rgba(255, 255, 255, 0.35);
 
-    /* Accent */
     --color-primary: #0a84ff;
     --color-primary-hover: #409cff;
     --color-primary-muted: rgba(10, 132, 255, 0.18);
@@ -1005,11 +1110,30 @@
     --color-success: #30d158;
     --color-warning: #ff9f0a;
     --color-error: #ff453a;
+  }
 
-    /* Layout - 3 Pane */
-    --targets-pane-width: 180px;
-    --skills-pane-width: 280px;
-    --editor-min-width: 720px;
+  /* ============================================
+     THEME: LIGHT
+     ============================================ */
+  :root[data-theme="light"] {
+    --color-bg: #f5f5f7;
+    --color-sidebar: #ffffff;
+    --color-surface: #e8e8ed;
+    --color-surface-hover: #d8d8dd;
+    --color-border: #d1d1d6;
+
+    --color-text: #1d1d1f;
+    --color-text-secondary: rgba(0, 0, 0, 0.85);
+    --color-text-muted: rgba(0, 0, 0, 0.55);
+    --color-text-dim: rgba(0, 0, 0, 0.35);
+
+    --color-primary: #007aff;
+    --color-primary-hover: #0051a8;
+    --color-primary-muted: rgba(0, 122, 255, 0.12);
+
+    --color-success: #34c759;
+    --color-warning: #ff9500;
+    --color-error: #ff3b30;
   }
 
   /* ============================================
@@ -1076,12 +1200,12 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    padding: 0 var(--space-3);
-    padding-bottom: var(--space-3);
+    padding: 0 var(--space-4);
+    padding-bottom: var(--space-2);
     border-bottom: 1px solid var(--color-border);
     -webkit-app-region: drag;
     flex-shrink: 0;
-    gap: var(--space-2);
+    gap: var(--space-3);
   }
 
   .pane-title {
@@ -1089,13 +1213,16 @@
     font-weight: var(--font-weight-semibold);
     color: var(--color-text);
     white-space: nowrap;
+    line-height: 28px; /* Match button height for alignment */
+    height: 28px;
   }
 
   .pane-actions {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
+    gap: var(--space-2);
     -webkit-app-region: no-drag;
+    height: 28px;
   }
 
   .pane-action {
@@ -1111,6 +1238,7 @@
     align-items: center;
     justify-content: center;
     transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+    -webkit-app-region: no-drag;
   }
 
   .pane-action:hover:not(:disabled) {
@@ -1131,9 +1259,11 @@
     background: var(--color-primary);
     color: white;
     width: auto;
+    height: 26px;
     padding: 0 var(--space-3);
     font-size: var(--font-xs);
     font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-sm);
   }
 
   .pane-action.primary:hover:not(:disabled) {
@@ -1211,10 +1341,23 @@
     animation: checkmark-pop 0.3s ease;
   }
 
+  .target-warning {
+    flex-shrink: 0;
+    color: var(--color-warning);
+    font-size: 10px;
+    cursor: help;
+    animation: warning-pulse 2s ease-in-out infinite;
+  }
+
   @keyframes checkmark-pop {
     0% { transform: scale(0); opacity: 0; }
     50% { transform: scale(1.3); }
     100% { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes warning-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 
   .targets-empty {
@@ -1222,6 +1365,35 @@
     font-size: var(--font-xs);
     color: var(--color-text-dim);
     text-align: center;
+  }
+
+  .targets-footer {
+    padding: var(--space-2) var(--space-3);
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+
+  .theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    font-size: var(--font-xs);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text);
+  }
+
+  .theme-toggle:active {
+    transform: scale(0.96);
   }
 
   .targets-toolbar {
@@ -1284,78 +1456,6 @@
     to { transform: rotate(0deg); }
   }
 
-  /* Add Target Form */
-  .add-target-form {
-    padding: var(--space-2);
-    margin-bottom: var(--space-2);
-    background: var(--color-surface);
-    border-radius: var(--radius-md);
-  }
-
-  .add-target-form select,
-  .add-target-form input {
-    width: 100%;
-    padding: var(--space-2);
-    margin-bottom: var(--space-2);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    color: var(--color-text);
-    font-size: var(--font-xs);
-    box-sizing: border-box;
-  }
-
-  .add-target-form select:focus,
-  .add-target-form input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-  }
-
-  .add-target-form input::placeholder {
-    color: var(--color-text-dim);
-  }
-
-  .add-target-actions {
-    display: flex;
-    gap: var(--space-2);
-    justify-content: flex-end;
-  }
-
-  .add-target-btn {
-    height: 24px;
-    padding: 0 var(--space-2);
-    background: var(--color-surface-hover);
-    border: none;
-    border-radius: var(--radius-sm);
-    color: var(--color-text-secondary);
-    font-size: var(--font-xs);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease;
-  }
-
-  .add-target-btn:hover:not(:disabled) {
-    background: var(--color-bg);
-  }
-
-  .add-target-btn:active:not(:disabled) {
-    transform: scale(0.96);
-  }
-
-  .add-target-btn.primary {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .add-target-btn.primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-  }
-
-  .add-target-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
   /* ============================================
      PANE 2: SKILLS
      ============================================ */
@@ -1386,12 +1486,14 @@
      ============================================ */
   .banner {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-3);
-    font-size: var(--font-xs);
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-sm);
     flex-shrink: 0;
+    line-height: 1.4;
+    overflow: hidden;
   }
 
   .banner-error {
@@ -1410,8 +1512,10 @@
   }
 
   .banner-content {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .banner-details {
@@ -1419,7 +1523,7 @@
     opacity: 0.9;
   }
 
-  .banner button {
+  .banner > button:not(.fix-button) {
     flex-shrink: 0;
     width: 20px;
     height: 20px;
@@ -1434,82 +1538,13 @@
     border-radius: var(--radius-sm);
   }
 
-  .banner button:hover {
+  .banner > button:not(.fix-button):hover {
     background: rgba(255, 255, 255, 0.1);
   }
 
   /* ============================================
-     NEW SKILL FORM
+     FORM UTILITIES
      ============================================ */
-  .new-skill-form {
-    margin: var(--space-3);
-    padding: var(--space-4);
-    background: linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--color-surface) 100%, transparent),
-      color-mix(in srgb, var(--color-surface) 85%, var(--color-bg))
-    );
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.2),
-      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-    animation: form-slide-in 0.2s ease-out;
-  }
-
-  @keyframes form-slide-in {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .form-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-4);
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .form-title {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-  }
-
-  .form-title :global(.icon) {
-    color: var(--color-primary);
-  }
-
-  .form-close {
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    background: none;
-    border: none;
-    color: var(--color-text-dim);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
-  }
-
-  .form-close:hover {
-    color: var(--color-text);
-    background: var(--color-surface-hover);
-  }
-
   .form-field {
     margin-bottom: var(--space-4);
   }
@@ -1522,38 +1557,6 @@
     margin-bottom: var(--space-2);
     text-transform: uppercase;
     letter-spacing: 0.03em;
-  }
-
-  .new-skill-form input,
-  .new-skill-form textarea {
-    width: 100%;
-    padding: var(--space-3);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    color: var(--color-text);
-    font-size: var(--font-sm);
-    font-family: inherit;
-    box-sizing: border-box;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-
-  .new-skill-form textarea {
-    resize: vertical;
-    min-height: 60px;
-    line-height: 1.5;
-  }
-
-  .new-skill-form input:focus,
-  .new-skill-form textarea:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-muted);
-  }
-
-  .new-skill-form input::placeholder,
-  .new-skill-form textarea::placeholder {
-    color: var(--color-text-dim);
   }
 
   .field-hint {
@@ -1569,59 +1572,6 @@
     background: var(--color-bg);
     border-radius: var(--radius-sm);
     color: var(--color-primary);
-  }
-
-  .form-actions {
-    display: flex;
-    gap: var(--space-2);
-    justify-content: flex-end;
-    padding-top: var(--space-3);
-    border-top: 1px solid var(--color-border);
-  }
-
-  .form-btn {
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    padding: 0 var(--space-4);
-    background: var(--color-surface-hover);
-    border: none;
-    border-radius: var(--radius-md);
-    color: var(--color-text-secondary);
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  }
-
-  .form-btn:hover:not(:disabled) {
-    background: var(--color-bg);
-  }
-
-  .form-btn:active:not(:disabled) {
-    transform: scale(0.97);
-  }
-
-  .form-btn.primary {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .form-btn.primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
-  }
-
-  .form-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .form-btn :global(.icon-sm) {
-    width: 14px;
-    height: 14px;
   }
 
   /* ============================================
@@ -1772,15 +1722,15 @@
   .skill-delete {
     flex-shrink: 0;
     visibility: hidden;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     padding: 0;
     background: none;
     border: none;
     color: var(--color-text-dim);
     font-size: 16px;
     cursor: pointer;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1807,12 +1757,9 @@
   }
 
   .editor-header {
-    justify-content: space-between;
     background: var(--color-sidebar);
-  }
-
-  .editor-header-empty {
-    background: var(--color-sidebar);
+    align-items: center;
+    padding-bottom: 0;
   }
 
   .editor-title {
@@ -1821,13 +1768,18 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
+    min-width: 0;
   }
 
   .editor-title h2 {
     margin: 0;
-    font-size: var(--font-sm);
+    font-size: var(--font-lg);
     font-weight: var(--font-weight-semibold);
     color: var(--color-text);
+    line-height: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .unsaved-dot {
@@ -1850,17 +1802,18 @@
   }
 
   .fix-button {
-    flex-shrink: 0;
-    height: 24px;
+    flex: 0 0 auto;
+    height: 28px;
     padding: 0 var(--space-3);
     font-size: var(--font-xs);
     font-weight: var(--font-weight-medium);
     color: var(--color-bg);
     background: var(--color-warning);
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     cursor: pointer;
     transition: background 0.15s ease, transform 0.1s ease;
+    white-space: nowrap;
   }
 
   .fix-button:hover:not(:disabled) {
@@ -2041,8 +1994,8 @@
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+    flex-direction: column-reverse;
+    gap: var(--space-3);
     z-index: 1000;
     pointer-events: none;
   }
@@ -2051,72 +2004,83 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    padding: var(--space-4) var(--space-5);
-    background: var(--color-surface);
+    padding: var(--space-4) var(--space-6);
+    background: var(--color-sidebar);
     border-radius: var(--radius-lg);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.3),
+      0 12px 40px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
     font-size: var(--font-base);
     font-weight: var(--font-weight-medium);
     color: var(--color-text);
     pointer-events: auto;
-    animation: snackbar-slide-in 0.2s ease-out;
-    min-width: 200px;
+    animation: snackbar-slide-up 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    min-width: 280px;
+    max-width: 480px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  @keyframes snackbar-slide-in {
+  @keyframes snackbar-slide-up {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(16px) scale(0.95);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
     }
   }
 
   .snackbar span {
     flex: 1;
+    line-height: 1.4;
   }
 
   .snackbar button {
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     padding: 0;
     background: none;
     border: none;
     color: var(--color-text-muted);
     cursor: pointer;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
   }
 
   .snackbar button:hover {
     color: var(--color-text);
-    background: var(--color-surface-hover);
+    background: rgba(255, 255, 255, 0.1);
   }
 
   .snackbar-success {
-    border-left: 3px solid var(--color-success);
+    border-left: 4px solid var(--color-success);
   }
 
   .snackbar-info {
-    border-left: 3px solid var(--color-primary);
+    border-left: 4px solid var(--color-primary);
   }
 
   .snackbar-warning {
-    border-left: 3px solid var(--color-warning);
+    border-left: 4px solid var(--color-warning);
+  }
+
+  .snackbar-error {
+    border-left: 4px solid var(--color-error);
   }
 
   /* ============================================
-     DROP ZONE OVERLAY
+     DROP ZONE OVERLAY (Full Window)
      ============================================ */
   .drop-zone-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(10, 132, 255, 0.15);
+    background: rgba(10, 132, 255, 0.12);
     border: 3px dashed var(--color-primary);
     display: flex;
     align-items: center;
@@ -2139,7 +2103,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-4);
+    text-align: center;
     padding: var(--space-8);
     background: var(--color-sidebar);
     border-radius: var(--radius-lg);
@@ -2163,12 +2127,93 @@
 
   .drop-zone-content :global(.drop-zone-icon) {
     color: var(--color-primary);
+    margin-bottom: var(--space-4);
   }
 
-  .drop-zone-content p {
+  .drop-zone-title {
     margin: 0;
     font-size: var(--font-lg);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text);
+  }
+
+  .drop-zone-hint {
+    margin: var(--space-2) 0 0 0;
+    font-size: var(--font-sm);
+    color: var(--color-text-muted);
+  }
+
+  /* ============================================
+     CONTEXT MENU
+     ============================================ */
+  .context-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+  }
+
+  .context-menu {
+    position: fixed;
+    z-index: 1001;
+    min-width: 160px;
+    padding: var(--space-1);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    animation: context-menu-appear 0.1s ease-out;
+  }
+
+  @keyframes context-menu-appear {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .context-menu-item {
+    display: block;
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    background: none;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+    font-size: var(--font-sm);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s ease;
+  }
+
+  .context-menu-item:hover:not(:disabled) {
+    background: var(--color-primary-muted);
+  }
+
+  .context-menu-item:active:not(:disabled) {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .context-menu-item:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .context-menu-item.destructive {
+    color: var(--color-error);
+  }
+
+  .context-menu-item.destructive:hover:not(:disabled) {
+    background: rgba(255, 69, 58, 0.15);
+  }
+
+  .context-menu-item.destructive:active:not(:disabled) {
+    background: var(--color-error);
+    color: white;
   }
 </style>
