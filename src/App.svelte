@@ -3,7 +3,6 @@
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
-  import ConfirmDeleteModal from './lib/ConfirmDeleteModal.svelte';
   import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill, setSaveMenuEnabled, scanFolderForSkills, importFromFolder } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
@@ -45,9 +44,6 @@
   let selectedTargetType = $state('');
   let customTargetPath = $state('');
 
-  // Delete confirmation state
-  let showDeleteModal = $state(false);
-  let skillToDelete = $state<SkillInfo | null>(null);
 
   // Editor state
   let editingSkill = $state<SkillInfo | null>(null);
@@ -199,22 +195,23 @@
     showNewSkillForm = false;
   }
 
-  function handleDeleteSkill(skill: SkillInfo, event: MouseEvent) {
+  async function handleDeleteSkill(skill: SkillInfo, event: MouseEvent) {
     event.stopPropagation();
-    skillToDelete = skill;
-    showDeleteModal = true;
-  }
 
-  async function confirmDeleteSkill() {
-    if (!skillToDelete) return;
+    const confirmed = await ask(
+      `This will permanently remove the skill and its symlinks from all targets.`,
+      {
+        title: `Delete "${skill.name}"?`,
+        kind: 'warning',
+        okLabel: 'Delete',
+        cancelLabel: 'Cancel',
+      }
+    );
 
-    const skill = skillToDelete;
+    if (!confirmed) return;
+
     const folderName = skill.folder_name;
     const wasEditing = editingSkill?.folder_name === folderName;
-
-    // Close modal first
-    showDeleteModal = false;
-    skillToDelete = null;
 
     if (wasEditing) {
       editingSkill = null;
@@ -234,11 +231,6 @@
       skills = previousSkills;
       error = e instanceof Error ? e.message : String(e);
     }
-  }
-
-  function cancelDeleteSkill() {
-    showDeleteModal = false;
-    skillToDelete = null;
   }
 
   async function handleEditSkill(skill: SkillInfo) {
@@ -985,14 +977,6 @@
   />
 {/if}
 
-<!-- Delete Confirmation Modal -->
-{#if showDeleteModal && skillToDelete}
-  <ConfirmDeleteModal
-    skillName={skillToDelete.name}
-    onconfirm={confirmDeleteSkill}
-    oncancel={cancelDeleteSkill}
-  />
-{/if}
 
 <!-- Snackbar container -->
 {#if snackbars.length > 0}
