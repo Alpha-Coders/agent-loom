@@ -1137,6 +1137,13 @@
   }
 
   /* ============================================
+     THEME TRANSITION
+     ============================================ */
+  :root {
+    --theme-transition: 0.3s ease;
+  }
+
+  /* ============================================
      GLOBAL STYLES
      ============================================ */
   :global(html), :global(body), :global(#app) {
@@ -1155,6 +1162,9 @@
     user-select: none;
     -webkit-user-select: none;
     cursor: default;
+    transition:
+      background-color var(--theme-transition),
+      color var(--theme-transition);
   }
 
   :global(input), :global(textarea), :global(.cm-editor) {
@@ -1206,6 +1216,7 @@
     -webkit-app-region: drag;
     flex-shrink: 0;
     gap: var(--space-3);
+    transition: border-color var(--theme-transition);
   }
 
   .pane-title {
@@ -1215,6 +1226,7 @@
     white-space: nowrap;
     line-height: 28px; /* Match button height for alignment */
     height: 28px;
+    transition: color var(--theme-transition);
   }
 
   .pane-actions {
@@ -1286,6 +1298,9 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    transition:
+      background-color var(--theme-transition),
+      border-color var(--theme-transition);
   }
 
   .targets-content {
@@ -1474,6 +1489,9 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    transition:
+      background-color var(--theme-transition),
+      border-color var(--theme-transition);
   }
 
   .skills-content {
@@ -1678,7 +1696,10 @@
     min-height: 64px;
     box-sizing: border-box;
     position: relative;
-    transition: background 0.2s ease, transform 0.1s ease;
+    transition:
+      background 0.2s ease,
+      transform 0.1s ease,
+      border-color var(--theme-transition);
   }
 
   .skill-item::before {
@@ -1758,6 +1779,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    transition: color var(--theme-transition);
   }
 
   .skill-description {
@@ -1766,6 +1788,7 @@
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    transition: color var(--theme-transition);
     line-clamp: 2;
     -webkit-box-orient: vertical;
     line-height: 1.4;
@@ -1811,10 +1834,12 @@
     flex-direction: column;
     min-width: var(--editor-min-width);
     background: var(--color-bg);
+    transition: background-color var(--theme-transition);
   }
 
   .editor-header {
     background: var(--color-sidebar);
+    transition: background-color var(--theme-transition);
   }
 
   .editor-title {
@@ -2019,7 +2044,11 @@
     font-size: var(--font-base);
     font-family: inherit;
     box-sizing: border-box;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease,
+      background-color var(--theme-transition),
+      color var(--theme-transition);
   }
 
   .new-skill-form-centered textarea {
