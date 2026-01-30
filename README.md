@@ -43,6 +43,27 @@ Agent Skills Manager is a desktop app that lets you manage AI agent skills from 
 - **Import** — Import existing skills from any target or folder
 - **Cross-Platform** — Works on macOS, Windows, and Linux
 
+## Supported Tools
+
+Agent Skills Manager works with any tool that supports the [agentskills.io](https://agentskills.io) specification:
+
+| Tool | Vendor | Skills Directory |
+|------|--------|------------------|
+| Claude Code | Anthropic | `~/.claude/skills/` |
+| Codex | OpenAI | `~/.codex/skills/` |
+| Gemini CLI | Google | `~/.gemini/skills/` |
+| Cursor | Anysphere | `~/.cursor/skills-cursor/` |
+| Amp | Sourcegraph | `~/.amp/skills/` |
+| Goose | Block | `~/.goose/skills/` |
+| Roo Code | Roo | `~/.roo-code/skills/` |
+| OpenCode | Anthropic | `~/.opencode/skills/` |
+| Vibe | Vibe | `~/.vibe/skills/` |
+| Firebender | Firebender | `~/.firebender/skills/` |
+| Mux | Mux | `~/.mux/skills/` |
+| Autohand | Autohand | `~/.autohand/skills/` |
+
+You can also add custom folder targets for tools not listed above.
+
 ## Installation
 
 ### Download
@@ -90,7 +111,7 @@ cargo install tauri-cli --version "^2"
 npm install
 
 # Run development server
-npm run dev
+npm run tauri dev
 ```
 
 ### Build
