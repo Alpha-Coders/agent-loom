@@ -709,7 +709,7 @@
           >
             <span class="nav-icon">{target.enabled ? '◉' : '○'}</span>
             <span class="nav-label">{target.name}</span>
-            {#if target.exists}
+            {#if target.enabled && target.exists}
               <span class="target-ready">✓</span>
             {/if}
           </div>
