@@ -29,10 +29,9 @@
 Agent Skills Manager is a desktop app that lets you manage AI agent skills from a single location. Instead of manually copying skills to each tool's directory, it maintains a central repository and syncs them via symlinks.
 
 ```
-~/.agentskills/skills/my-skill/    →    ~/.claude/skills/my-skill
-                           →    ~/.cursor/skills-cursor/my-skill
-                           →    ~/.codex/skills/my-skill
-                           →    ... and more
+~/.claude/skills/my-skill           →  ~/.agentskills/skills/my-skill
+~/.cursor/skills-cursor/my-skill    →  ~/.agentskills/skills/my-skill
+~/.codex/skills/my-skill            →  ~/.agentskills/skills/my-skill
 ```
 
 ## Features
