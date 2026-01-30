@@ -10,7 +10,7 @@ mod tray;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 use talent_core::{ConflictResolution, SkillManager, ValidationStatus};
 
 /// Skill information for the frontend
@@ -199,6 +199,16 @@ pub fn run() {
             commands::remove_custom_target,
             commands::get_available_target_types,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Handle dock icon click on macOS (reopen event)
+            if let RunEvent::Reopen { .. } = event {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        });
 }
