@@ -398,7 +398,10 @@ impl SkillManager {
         for target in &self.targets {
             if target.enabled {
                 let new_symlink = target.skill_link_path(new_name);
+                #[cfg(unix)]
                 let _ = std::os::unix::fs::symlink(&new_path, &new_symlink);
+                #[cfg(windows)]
+                let _ = std::os::windows::fs::symlink_dir(&new_path, &new_symlink);
             }
         }
 
