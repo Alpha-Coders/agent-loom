@@ -1264,10 +1264,16 @@
     font-size: var(--font-xs);
     font-weight: var(--font-weight-medium);
     border-radius: var(--radius-sm);
+    transition: background 0.15s ease, box-shadow 0.2s ease, transform 0.1s ease;
   }
 
   .pane-action.primary:hover:not(:disabled) {
     background: var(--color-primary-hover);
+    box-shadow: 0 2px 12px rgba(10, 132, 255, 0.4);
+  }
+
+  .pane-action.primary:active:not(:disabled) {
+    box-shadow: 0 1px 6px rgba(10, 132, 255, 0.3);
   }
 
   /* ============================================
@@ -1415,15 +1421,17 @@
     font-size: var(--font-xs);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease;
   }
 
   .sync-button:hover:not(:disabled) {
     background: var(--color-primary-hover);
+    box-shadow: 0 4px 16px rgba(10, 132, 255, 0.4);
   }
 
   .sync-button:active:not(:disabled) {
     transform: scale(0.97);
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
   }
 
   .sync-button:disabled {
@@ -1494,6 +1502,18 @@
     flex-shrink: 0;
     line-height: 1.4;
     overflow: hidden;
+    animation: banner-slide-in 0.25s ease-out;
+  }
+
+  @keyframes banner-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .banner-error {
@@ -1622,6 +1642,12 @@
 
   .empty-icon {
     margin-bottom: var(--space-4);
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
   }
 
   .empty-icon :global(.empty-icon-sparkle) {
@@ -1651,6 +1677,21 @@
     cursor: pointer;
     min-height: 64px;
     box-sizing: border-box;
+    position: relative;
+    transition: background 0.2s ease, transform 0.1s ease;
+  }
+
+  .skill-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--color-primary);
+    opacity: 0;
+    transform: scaleY(0);
+    transition: opacity 0.2s ease, transform 0.2s ease;
   }
 
   .skill-item:hover {
@@ -1661,8 +1702,14 @@
     background: var(--color-primary-muted);
   }
 
+  .skill-item.selected::before {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+
   .skill-item:active {
     background: rgba(255, 255, 255, 0.06);
+    transform: scale(0.995);
   }
 
   .skill-item.selected:active {
@@ -1683,14 +1730,17 @@
     height: 8px;
     border-radius: 50%;
     background: var(--color-text-dim);
+    transition: box-shadow 0.3s ease, background 0.2s ease;
   }
 
   .status-dot.valid {
     background: var(--color-success);
+    box-shadow: 0 0 8px rgba(48, 209, 88, 0.5);
   }
 
   .status-dot.invalid {
     background: var(--color-error);
+    box-shadow: 0 0 8px rgba(255, 69, 58, 0.5);
   }
 
   .skill-info {
@@ -1723,7 +1773,7 @@
 
   .skill-delete {
     flex-shrink: 0;
-    visibility: hidden;
+    opacity: 0;
     width: 28px;
     height: 28px;
     padding: 0;
@@ -1736,15 +1786,20 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.1s ease;
   }
 
   .skill-item:hover .skill-delete {
-    visibility: visible;
+    opacity: 1;
   }
 
   .skill-delete:hover {
     color: var(--color-error);
     background: rgba(255, 69, 58, 0.15);
+  }
+
+  .skill-delete:active {
+    transform: scale(0.9);
   }
 
   /* ============================================
@@ -1832,6 +1887,18 @@
   .editor-container {
     flex: 1;
     overflow: hidden;
+    animation: editor-fade-in 0.2s ease-out;
+  }
+
+  @keyframes editor-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   /* Editor Placeholder */
@@ -1865,6 +1932,7 @@
     color: var(--color-text-dim);
     opacity: 0.4;
     margin-bottom: var(--space-4);
+    animation: float 3s ease-in-out infinite;
   }
 
   .placeholder-title {
@@ -1894,7 +1962,7 @@
     font-size: var(--font-sm);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease;
   }
 
   .placeholder-action :global(.icon) {
@@ -1903,10 +1971,12 @@
 
   .placeholder-action:hover {
     background: var(--color-primary-hover);
+    box-shadow: 0 4px 20px rgba(10, 132, 255, 0.4);
   }
 
   .placeholder-action:active {
     transform: scale(0.97);
+    box-shadow: 0 2px 10px rgba(10, 132, 255, 0.3);
   }
 
   /* New Skill Form in Editor Pane */
