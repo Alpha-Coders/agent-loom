@@ -139,7 +139,7 @@ jobs:
         if: matrix.platform == 'macos-latest'
         env:
           TARGET: ${{ matrix.target }}
-        run: npm run tauri build -- --target "$TARGET"
+        run: npm run tauri build -- --target "$TARGET" --bundles app
 
       - name: Build (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -149,6 +149,7 @@ jobs:
 
       - name: Build (Windows)
         if: matrix.platform == 'windows-latest'
+        shell: bash
         env:
           TARGET: ${{ matrix.target }}
         run: npm run tauri build -- --target "$TARGET" --bundles nsis
@@ -160,9 +161,24 @@ jobs:
           ARCH: ${{ matrix.arch }}
           TARGET: ${{ matrix.target }}
         run: |
-          APP_PATH="src-tauri/target/${TARGET}/release/bundle/macos/Talent.app"
-          ZIP_NAME="Talent-${VERSION}-macos-${ARCH}.zip"
+          echo "Looking for macOS bundle..."
+          # Debug: show what was built
+          find src-tauri/target -name "*.app" -type d 2>/dev/null || echo "No .app bundles found"
 
+          APP_PATH="src-tauri/target/${TARGET}/release/bundle/macos/Talent.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Expected path not found: $APP_PATH"
+            echo "Searching for Talent.app..."
+            APP_PATH=$(find src-tauri/target -name "Talent.app" -type d | head -1)
+            if [ -z "$APP_PATH" ]; then
+              echo "Error: Could not find Talent.app"
+              find src-tauri/target -type d -name "bundle" -exec ls -la {} \; 2>/dev/null || true
+              exit 1
+            fi
+            echo "Found at: $APP_PATH"
+          fi
+
+          ZIP_NAME="Talent-${VERSION}-macos-${ARCH}.zip"
           cd "$(dirname "$APP_PATH")"
           zip -r -q "${GITHUB_WORKSPACE}/${ZIP_NAME}" "Talent.app"
           echo "artifact_name=${ZIP_NAME}" >> $GITHUB_ENV
@@ -171,10 +187,22 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          TARGET: ${{ matrix.target }}
         run: |
-          APPIMAGE=$(find src-tauri/target -name "*.AppImage" | head -1)
-          NEW_NAME="Talent-${VERSION}-linux-x64.AppImage"
+          echo "Looking for Linux AppImage..."
+          # Debug: show what was built
+          find src-tauri/target -name "*.AppImage" 2>/dev/null || echo "No AppImage found"
 
+          APPIMAGE=$(find src-tauri/target -name "*.AppImage" | head -1)
+          if [ -z "$APPIMAGE" ]; then
+            echo "Error: Could not find AppImage"
+            echo "Checking bundle directory..."
+            find src-tauri/target -type d -name "bundle" -exec ls -la {} \; 2>/dev/null || true
+            exit 1
+          fi
+          echo "Found: $APPIMAGE"
+
+          NEW_NAME="Talent-${VERSION}-linux-x64.AppImage"
           cp "$APPIMAGE" "$NEW_NAME"
           chmod +x "$NEW_NAME"
           echo "artifact_name=${NEW_NAME}" >> $GITHUB_ENV
@@ -185,15 +213,23 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # Find the NSIS installer (named *-setup.exe or *_setup.exe)
+          echo "Looking for Windows NSIS installer..."
+          # Debug: show what was built
+          find src-tauri/target -name "*.exe" -path "*/bundle/*" 2>/dev/null || echo "No exe in bundle found"
+
           EXE=$(find src-tauri/target -name "*setup*.exe" -path "*/release/bundle/nsis/*" | head -1)
           if [ -z "$EXE" ]; then
+            # Try alternate patterns
+            EXE=$(find src-tauri/target -name "*.exe" -path "*/bundle/nsis/*" | head -1)
+          fi
+          if [ -z "$EXE" ]; then
             echo "Error: Could not find NSIS installer"
-            find src-tauri/target -name "*.exe" -path "*/release/bundle/*" || true
+            find src-tauri/target -type d -name "bundle" -exec ls -laR {} \; 2>/dev/null || true
             exit 1
           fi
-          NEW_NAME="Talent-${VERSION}-windows-x64-setup.exe"
+          echo "Found: $EXE"
 
+          NEW_NAME="Talent-${VERSION}-windows-x64-setup.exe"
           cp "$EXE" "$NEW_NAME"
           echo "artifact_name=${NEW_NAME}" >> $GITHUB_ENV
 
