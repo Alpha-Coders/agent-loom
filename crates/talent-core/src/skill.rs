@@ -587,18 +587,32 @@ description: {}
     }
 
     /// Save content to the SKILL.md file and reload the skill
+    ///
+    /// Always saves the file, even if frontmatter is invalid.
+    /// If parsing fails, keeps the old metadata and marks as invalid.
     pub fn save_content(&mut self, content: &str) -> Result<()> {
         let skill_file = self.path.join(SKILL_FILE_NAME);
+
+        // Always write the file first - user should be able to save work-in-progress
         fs::write(&skill_file, content).map_err(|e| Error::io(&skill_file, e))?;
 
-        // Re-parse the frontmatter to update metadata
-        let (meta, parsed_content) = Self::parse_frontmatter(content, &skill_file)?;
-        self.meta = meta;
-        self.content = parsed_content;
-
-        // Reset validation status since content changed
-        self.validation_status = ValidationStatus::Unknown;
-        self.validation_errors.clear();
+        // Try to re-parse the frontmatter to update metadata
+        // If parsing fails, keep old metadata but mark as invalid
+        match Self::parse_frontmatter(content, &skill_file) {
+            Ok((meta, parsed_content)) => {
+                self.meta = meta;
+                self.content = parsed_content;
+                // Reset validation status since content changed
+                self.validation_status = ValidationStatus::Unknown;
+                self.validation_errors.clear();
+            }
+            Err(e) => {
+                // Save succeeded but parsing failed - mark as invalid
+                self.content = content.to_string();
+                self.validation_status = ValidationStatus::Invalid;
+                self.validation_errors = vec![e.to_string()];
+            }
+        }
 
         Ok(())
     }

@@ -125,8 +125,8 @@ impl TargetKind {
 /// A detected or configured target CLI
 #[derive(Debug, Clone)]
 pub struct Target {
-    /// The kind of CLI tool
-    pub kind: TargetKind,
+    /// The kind of CLI tool (None for custom folder targets)
+    pub kind: Option<TargetKind>,
 
     /// Path to the target's skills directory
     pub skills_path: PathBuf,
@@ -136,16 +136,36 @@ pub struct Target {
 
     /// Whether this target is enabled for syncing
     pub enabled: bool,
+
+    /// Custom ID for folder targets (used when kind is None)
+    pub custom_id: Option<String>,
+
+    /// Custom display name for folder targets (used when kind is None)
+    pub custom_name: Option<String>,
 }
 
 impl Target {
     /// Create a new target with a specific skills path
     pub fn new(kind: TargetKind, skills_path: PathBuf) -> Self {
         Self {
-            kind,
+            kind: Some(kind),
             skills_path,
             auto_detected: false,
             enabled: true,
+            custom_id: None,
+            custom_name: None,
+        }
+    }
+
+    /// Create a new folder-based target with custom ID and name
+    pub fn new_folder(skills_path: PathBuf, id: String, name: String) -> Self {
+        Self {
+            kind: None,
+            skills_path,
+            auto_detected: false,
+            enabled: true,
+            custom_id: Some(id),
+            custom_name: Some(name),
         }
     }
 
@@ -157,10 +177,12 @@ impl Target {
         if config_dir.exists() {
             let skills_path = config_dir.join(kind.skills_subdir());
             Some(Self {
-                kind,
+                kind: Some(kind),
                 skills_path,
                 auto_detected: true,
                 enabled: true,
+                custom_id: None,
+                custom_name: None,
             })
         } else {
             None
@@ -176,13 +198,25 @@ impl Target {
     }
 
     /// Get the display name
-    pub fn name(&self) -> &'static str {
-        self.kind.display_name()
+    pub fn name(&self) -> &str {
+        if let Some(ref custom_name) = self.custom_name {
+            custom_name
+        } else if let Some(kind) = self.kind {
+            kind.display_name()
+        } else {
+            "Unknown"
+        }
     }
 
     /// Get the identifier
-    pub fn id(&self) -> &'static str {
-        self.kind.id()
+    pub fn id(&self) -> &str {
+        if let Some(ref custom_id) = self.custom_id {
+            custom_id
+        } else if let Some(kind) = self.kind {
+            kind.id()
+        } else {
+            "unknown"
+        }
     }
 
     /// Check if the skills directory exists
@@ -219,15 +253,77 @@ impl Target {
     }
 }
 
+/// Sync status for a target
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SyncStatus {
+    /// Whether the target is fully in sync
+    pub is_synced: bool,
+
+    /// Skills missing from the target (exist in central but not in target)
+    pub missing_skills: Vec<String>,
+
+    /// Items in target that aren't valid symlinks to central storage
+    pub extra_items: Vec<String>,
+
+    /// Broken symlinks (point to non-existent paths)
+    pub broken_links: Vec<String>,
+}
+
+impl SyncStatus {
+    /// Check if target has any sync issues
+    pub fn has_issues(&self) -> bool {
+        !self.is_synced
+    }
+
+    /// Get a summary of sync issues for tooltip
+    pub fn issues_summary(&self) -> Vec<String> {
+        let mut issues = Vec::new();
+        if !self.missing_skills.is_empty() {
+            issues.push(format!("{} missing skill(s)", self.missing_skills.len()));
+        }
+        if !self.extra_items.is_empty() {
+            issues.push(format!("{} unmanaged item(s)", self.extra_items.len()));
+        }
+        if !self.broken_links.is_empty() {
+            issues.push(format!("{} broken link(s)", self.broken_links.len()));
+        }
+        issues
+    }
+}
+
 /// Information about a target for serialization/display
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetInfo {
     pub id: String,
     pub name: String,
-    pub skills_path: PathBuf,
+    pub skills_path: String,
     pub auto_detected: bool,
     pub enabled: bool,
     pub exists: bool,
+    pub sync_status: Option<SyncStatus>,
+}
+
+impl TargetInfo {
+    /// Create TargetInfo from a Target, optionally checking sync status
+    pub fn from_target(target: &Target, central_skills: Option<&[String]>, skills_dir: Option<&PathBuf>) -> Self {
+        let sync_status = if target.enabled && target.skills_dir_exists() {
+            central_skills.map(|skills| {
+                check_sync_status(target, skills, skills_dir.expect("skills_dir required when central_skills provided"))
+            })
+        } else {
+            None
+        };
+
+        Self {
+            id: target.id().to_string(),
+            name: target.name().to_string(),
+            skills_path: target.skills_path.display().to_string(),
+            auto_detected: target.auto_detected,
+            enabled: target.enabled,
+            exists: target.skills_dir_exists(),
+            sync_status,
+        }
+    }
 }
 
 impl From<&Target> for TargetInfo {
@@ -235,12 +331,97 @@ impl From<&Target> for TargetInfo {
         Self {
             id: target.id().to_string(),
             name: target.name().to_string(),
-            skills_path: target.skills_path.clone(),
+            skills_path: target.skills_path.display().to_string(),
             auto_detected: target.auto_detected,
             enabled: target.enabled,
             exists: target.skills_dir_exists(),
+            sync_status: None,
         }
     }
+}
+
+/// Check sync status of a target against central skills
+fn check_sync_status(target: &Target, central_skill_names: &[String], skills_dir: &PathBuf) -> SyncStatus {
+    use std::fs;
+
+    let mut status = SyncStatus {
+        is_synced: true,
+        missing_skills: Vec::new(),
+        extra_items: Vec::new(),
+        broken_links: Vec::new(),
+    };
+
+    let target_path = &target.skills_path;
+
+    // Get items in target directory
+    let target_items: std::collections::HashSet<String> = if target_path.exists() {
+        fs::read_dir(target_path)
+            .ok()
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    // Check each central skill
+    for skill_name in central_skill_names {
+        let link_path = target_path.join(skill_name);
+        let expected_target = skills_dir.join(skill_name);
+
+        if !link_path.exists() {
+            // Skill missing from target
+            status.missing_skills.push(skill_name.clone());
+            status.is_synced = false;
+        } else if link_path.is_symlink() {
+            // Check if symlink points to correct location
+            if let Ok(link_target) = fs::read_link(&link_path) {
+                if link_target != expected_target {
+                    // Symlink points to wrong location
+                    status.extra_items.push(skill_name.clone());
+                    status.is_synced = false;
+                } else if !expected_target.exists() {
+                    // Symlink target doesn't exist (broken link)
+                    status.broken_links.push(skill_name.clone());
+                    status.is_synced = false;
+                }
+            }
+        } else {
+            // Not a symlink - it's a real directory/file (unmanaged)
+            status.extra_items.push(skill_name.clone());
+            status.is_synced = false;
+        }
+    }
+
+    // Check for extra items in target that aren't in central skills
+    let central_set: std::collections::HashSet<&String> = central_skill_names.iter().collect();
+    for item in &target_items {
+        if !central_set.contains(item) {
+            let item_path = target_path.join(item);
+            if item_path.is_symlink() {
+                // Check if it's a broken symlink or points outside central
+                if let Ok(link_target) = fs::read_link(&item_path) {
+                    if !link_target.starts_with(skills_dir) {
+                        status.extra_items.push(item.clone());
+                        status.is_synced = false;
+                    } else if !link_target.exists() {
+                        status.broken_links.push(item.clone());
+                        status.is_synced = false;
+                    }
+                }
+            } else {
+                // Real directory/file not in central skills
+                status.extra_items.push(item.clone());
+                status.is_synced = false;
+            }
+        }
+    }
+
+    status
 }
 
 #[cfg(test)]
@@ -285,8 +466,23 @@ mod tests {
         let path = PathBuf::from("/custom/path");
         let target = Target::new(TargetKind::ClaudeCode, path.clone());
 
-        assert_eq!(target.kind, TargetKind::ClaudeCode);
+        assert_eq!(target.kind, Some(TargetKind::ClaudeCode));
         assert_eq!(target.skills_path, path);
+        assert!(!target.auto_detected);
+        assert!(target.enabled);
+    }
+
+    #[test]
+    fn target_new_folder_creates_custom_target() {
+        let path = PathBuf::from("/custom/folder");
+        let target = Target::new_folder(path.clone(), "folder-test".to_string(), "Test Folder".to_string());
+
+        assert_eq!(target.kind, None);
+        assert_eq!(target.skills_path, path);
+        assert_eq!(target.custom_id, Some("folder-test".to_string()));
+        assert_eq!(target.custom_name, Some("Test Folder".to_string()));
+        assert_eq!(target.id(), "folder-test");
+        assert_eq!(target.name(), "Test Folder");
         assert!(!target.auto_detected);
         assert!(target.enabled);
     }

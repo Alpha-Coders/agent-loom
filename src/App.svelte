@@ -949,7 +949,7 @@
             <input
               id="skill-name"
               type="text"
-              placeholder="pdf-processing"
+              placeholder="example-skill-name"
               bind:value={newSkillName}
               autofocus
               autocapitalize="off"
@@ -1645,11 +1645,11 @@
   .skill-item {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--color-border);
     cursor: pointer;
-    min-height: 56px;
+    min-height: 64px;
     box-sizing: border-box;
   }
 
@@ -1698,7 +1698,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-1);
   }
 
   .skill-name {
@@ -1714,9 +1714,10 @@
     font-size: var(--font-xs);
     color: var(--color-text-muted);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.4;
   }
 
   .skill-delete {
@@ -1759,7 +1760,8 @@
   .editor-header {
     background: var(--color-sidebar);
     align-items: center;
-    padding-bottom: 0;
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-2);
   }
 
   .editor-title {
@@ -1776,7 +1778,7 @@
     font-size: var(--font-lg);
     font-weight: var(--font-weight-semibold);
     color: var(--color-text);
-    line-height: 1;
+    line-height: 1.2;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
