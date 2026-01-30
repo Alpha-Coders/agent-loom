@@ -5,6 +5,7 @@
   import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill, setSaveMenuEnabled } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
+  import { Plus, RefreshCw, Download, X, Sparkles, Trash2 } from 'lucide-svelte';
 
   // State using Svelte 5 runes
   let skills = $state<SkillInfo[]>([]);
@@ -484,9 +485,7 @@
         <div class="nav-section-header">
           <span class="nav-section-title">Targets</span>
           <button class="nav-section-action" onclick={handleShowAddTarget} title="Add target">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
+            <Plus class="icon" size={16} strokeWidth={1.5} />
           </button>
         </div>
         {#if showAddTargetForm}
@@ -539,19 +538,13 @@
       </button>
       <div class="sidebar-actions-row">
         <button class="sidebar-action-small" onclick={handleRefresh} disabled={isLoading} title="Refresh skills">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-          </svg>
+          <RefreshCw class="icon" size={16} strokeWidth={1.5} />
         </button>
         <button class="sidebar-action-small" onclick={handleImport} disabled={isImporting} title="Import from targets">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
+          <Download class="icon" size={16} strokeWidth={1.5} />
         </button>
         <button class="sidebar-action-small" onclick={() => showNewSkillForm = !showNewSkillForm} title="New skill">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
+          <Plus class="icon" size={16} strokeWidth={1.5} />
         </button>
       </div>
     </div>
@@ -570,9 +563,7 @@
       <div class="error-banner">
         <span>{error}</span>
         <button onclick={() => error = null} aria-label="Dismiss error">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
+          <X class="icon" size={16} strokeWidth={1.5} />
         </button>
       </div>
     {/if}
@@ -581,15 +572,11 @@
       <div class="new-skill-form">
         <div class="form-header">
           <div class="form-title">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />
-            </svg>
+            <Sparkles class="icon" size={16} strokeWidth={1.5} />
             <span>New Skill</span>
           </div>
           <button class="form-close" onclick={() => showNewSkillForm = false} title="Cancel (Esc)">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
+            <X class="icon" size={16} strokeWidth={1.5} />
           </button>
         </div>
 
@@ -627,9 +614,7 @@
         <div class="form-actions">
           <button onclick={() => showNewSkillForm = false}>Cancel</button>
           <button class="primary" onclick={handleCreateSkill} disabled={!newSkillName.trim() || !newSkillDescription.trim()}>
-            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
+            <Plus class="icon-sm" size={14} strokeWidth={2} />
             Create Skill
           </button>
         </div>
@@ -657,9 +642,7 @@
           {/if}
         </div>
         <button onclick={() => lastSyncResults = []} aria-label="Dismiss sync results">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
+          <X class="icon" size={16} strokeWidth={1.5} />
         </button>
       </div>
     {/if}
@@ -671,9 +654,7 @@
           Imported: {lastImportResult.imported.length} skills
         </span>
         <button onclick={() => lastImportResult = null} aria-label="Dismiss import results">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
+          <X class="icon" size={16} strokeWidth={1.5} />
         </button>
       </div>
     {/if}
@@ -707,9 +688,7 @@
               <div class="skill-description">{skill.description}</div>
             </div>
             <button class="skill-delete" onclick={(e) => handleDeleteSkill(skill, e)} title="Delete skill">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
+              <Trash2 class="icon" size={14} strokeWidth={1.5} />
             </button>
           </div>
         {/each}
@@ -770,9 +749,7 @@
       <div class="snackbar snackbar-{snackbar.type}">
         <span>{snackbar.message}</span>
         <button onclick={() => dismissSnackbar(snackbar.id)} aria-label="Dismiss notification">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
+          <X class="icon" size={16} strokeWidth={1.5} />
         </button>
       </div>
     {/each}
@@ -1371,7 +1348,7 @@
     color: var(--color-text);
   }
 
-  .form-title .icon {
+  .form-title :global(.icon) {
     color: var(--color-primary);
   }
 
@@ -1497,7 +1474,7 @@
     cursor: not-allowed;
   }
 
-  .form-actions .icon-sm {
+  .form-actions :global(.icon-sm) {
     width: 14px;
     height: 14px;
   }
