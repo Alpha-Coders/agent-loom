@@ -7,7 +7,7 @@ authors.workspace = true
 description = "CLI for Agent Skills Manager"
 
 [[bin]]
-name = "asm"
+name = "agentskillsmanager"
 path = "src/main.rs"
 
 [dependencies]

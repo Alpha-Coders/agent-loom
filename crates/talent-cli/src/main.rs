@@ -1,4 +1,4 @@
-//! ASM CLI - Agent Skills Manager
+//! Agent Skills Manager CLI
 //!
 //! Command-line interface for managing skills across AI CLI tools.
 
@@ -9,7 +9,7 @@ use asm_core::{
 };
 
 #[derive(Parser)]
-#[command(name = "asm")]
+#[command(name = "agentskillsmanager")]
 #[command(about = "Agent Skills Manager - Sync skills across AI CLI tools")]
 #[command(version)]
 struct Cli {
@@ -124,7 +124,7 @@ fn main() {
         }) => cmd_import(all, overwrite, json, dry_run),
         None => {
             println!("Agent Skills Manager");
-            println!("Run 'asm --help' for usage");
+            println!("Run 'agentskillsmanager--help' for usage");
             Ok(())
         }
     };
@@ -228,7 +228,7 @@ fn cmd_sync(target: Option<String>, dry_run: bool) -> Result<(), Box<dyn std::er
             Some(result) => vec![result],
             None => {
                 eprintln!(
-                    "Target '{}' not found. Run 'asm targets' to see available targets.",
+                    "Target '{}' not found. Run 'agentskillsmanagertargets' to see available targets.",
                     target_id
                 );
                 return Ok(());
@@ -281,7 +281,7 @@ fn cmd_sync(target: Option<String>, dry_run: bool) -> Result<(), Box<dyn std::er
 
 /// Show diagnostic information
 fn cmd_doctor() -> Result<(), Box<dyn std::error::Error>> {
-    println!("ASM Doctor - Diagnostic Information\n");
+    println!("Agent Skills Manager Doctor - Diagnostic Information\n");
 
     // Try to create manager
     let manager_result = SkillManager::new();
@@ -439,7 +439,7 @@ fn cmd_create(name: &str, description: &str) -> Result<(), Box<dyn std::error::E
     let skill = manager.create_skill(name, description)?;
     println!("Created skill: {}", skill.name());
     println!("  Path: {}", skill.path.display());
-    println!("\nEdit the SKILL.md file to add content, then run 'asm sync' to deploy.");
+    println!("\nEdit the SKILL.md file to add content, then run 'agentskillsmanagersync' to deploy.");
 
     Ok(())
 }
@@ -547,7 +547,7 @@ fn cmd_import(
             );
         } else {
             println!("No importable skills found in detected targets.");
-            println!("\nSkills already managed by ASM (symlinks) are automatically skipped.");
+            println!("\nSkills already managed by Agent Skills Manager (symlinks) are automatically skipped.");
         }
         return Ok(());
     }

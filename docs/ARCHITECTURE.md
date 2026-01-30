@@ -175,23 +175,23 @@ agent-skills-manager/
 
 ```bash
 # Sync skills to all targets
-asm sync
+agentskillsmanagersync
 
 # Sync to specific target
-asm sync --target claude
+agentskillsmanagersync --target claude
 
 # List all skills
-asm list
+agentskillsmanagerlist
 
 # Create new skill
-asm create my-skill
+agentskillsmanagercreate my-skill
 
 # Validate skills
-asm validate
+agentskillsmanagervalidate
 
 # Show targets
-asm targets
+agentskillsmanagertargets
 
 # Diagnose issues
-asm doctor
+agentskillsmanagerdoctor
 ```
