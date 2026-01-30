@@ -29,6 +29,8 @@ pub fn create_menu(app: &AppHandle) -> Result<Menu<Wry>, tauri::Error> {
     // App menu (Agent Skills Manager)
     let app_menu = Submenu::new(app, "Agent Skills Manager", true)?;
     let about_metadata = AboutMetadataBuilder::new()
+        .version(Some(env!("CARGO_PKG_VERSION")))
+        .short_version(Some(env!("GIT_HASH")))
         .authors(Some(vec!["Alpha Coders".to_string()]))
         .copyright(Some("© 2025 Alpha Coders"))
         .website(Some("https://github.com/Alpha-Coders/agent-skills-manager"))
