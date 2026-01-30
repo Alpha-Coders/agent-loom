@@ -27,6 +27,17 @@
   // Derived state
   let selectedCount = $derived(selectedSkills.size);
   let hasAnySelected = $derived(selectedCount > 0);
+  let conflictCount = $derived(skills.filter(s => s.has_conflict).length);
+  let fixesCount = $derived(skills.filter(s => s.needs_fixes && !s.has_conflict).length);
+  let needsAttentionCount = $derived(skills.filter(s => s.has_conflict || s.needs_fixes).length);
+
+  // Auto-expand skills that need attention on mount
+  $effect(() => {
+    const needsAttention = skills.filter(s => s.has_conflict || s.needs_fixes);
+    if (needsAttention.length > 0 && needsAttention.length <= 5) {
+      expandedSkills = new Set(needsAttention.map(s => s.source_path));
+    }
+  });
 
   function toggleSkill(path: string) {
     if (selectedSkills.has(path)) {
@@ -107,6 +118,20 @@
           {/if}
         </span>
       </label>
+      {#if needsAttentionCount > 0}
+        <div class="attention-banner">
+          <AlertTriangle size={14} strokeWidth={2} />
+          <span>
+            {#if conflictCount > 0 && fixesCount > 0}
+              {conflictCount} conflict{conflictCount === 1 ? '' : 's'}, {fixesCount} need{fixesCount === 1 ? 's' : ''} fixes
+            {:else if conflictCount > 0}
+              {conflictCount} conflict{conflictCount === 1 ? '' : 's'} to resolve
+            {:else}
+              {fixesCount} skill{fixesCount === 1 ? '' : 's'} need{fixesCount === 1 ? 's' : ''} fixes
+            {/if}
+          </span>
+        </div>
+      {/if}
     </div>
 
     <div class="skill-list">
@@ -115,7 +140,7 @@
         {@const isExpanded = expandedSkills.has(skill.source_path)}
         {@const hasDetails = skill.needs_fixes || skill.has_conflict}
 
-        <div class="skill-item" class:selected={isSelected}>
+        <div class="skill-item" class:selected={isSelected} class:needs-attention={skill.has_conflict || skill.needs_fixes}>
           <div class="skill-row">
             <label class="skill-checkbox">
               <input
@@ -337,6 +362,9 @@
   }
 
   .modal-subheader {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
     padding: var(--space-3) var(--space-5);
     border-bottom: 1px solid var(--color-border);
     background: var(--color-bg);
@@ -355,6 +383,19 @@
     cursor: pointer;
   }
 
+  .attention-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(255, 159, 10, 0.12);
+    border: 1px solid rgba(255, 159, 10, 0.3);
+    border-radius: var(--radius-md);
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-warning);
+  }
+
   .skill-list {
     flex: 1;
     overflow-y: auto;
@@ -367,6 +408,14 @@
 
   .skill-item.selected {
     background: rgba(10, 132, 255, 0.08);
+  }
+
+  .skill-item.needs-attention {
+    border-left: 3px solid var(--color-warning);
+  }
+
+  .skill-item.needs-attention .skill-row {
+    padding-left: calc(var(--space-5) - 3px);
   }
 
   .skill-row {
