@@ -14,11 +14,18 @@ pub fn get_skills(state: tauri::State<'_, AppState>) -> Result<Vec<SkillInfo>, S
     Ok(manager.skills().iter().map(SkillInfo::from).collect())
 }
 
-/// Get all targets
+/// Get all targets with sync status
 #[tauri::command]
 pub fn get_targets(state: tauri::State<'_, AppState>) -> Result<Vec<TargetInfo>, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    Ok(manager.targets().iter().map(TargetInfo::from).collect())
+
+    // Get skill names for sync status check
+    let skill_names: Vec<String> = manager.skills().iter().map(|s| s.folder_name().to_string()).collect();
+    let skills_dir = manager.config().skills_dir.clone();
+
+    Ok(manager.targets().iter().map(|t| {
+        TargetInfo::from_target(t, Some(&skill_names), Some(&skills_dir))
+    }).collect())
 }
 
 /// Sync all skills to all targets
@@ -43,10 +50,15 @@ pub fn create_skill(
 }
 
 /// Validate a specific skill
+/// Always returns the skill info, even if validation fails.
+/// The validation status and errors are included in the returned SkillInfo.
 #[tauri::command]
 pub fn validate_skill(state: tauri::State<'_, AppState>, name: String) -> Result<SkillInfo, String> {
     let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
-    manager.validate_skill(&name).map_err(|e| e.to_string())?;
+
+    // Run validation but ignore the result - we want to return the skill
+    // even if it has validation errors (the errors are stored on the skill)
+    let _ = manager.validate_skill(&name);
 
     let skill = manager
         .get_skill(&name)
@@ -271,6 +283,19 @@ pub fn add_custom_target(
         .find(|t| t.id() == target_id)
         .ok_or_else(|| "Target not found after creation".to_string())?;
     Ok(TargetInfo::from(target))
+}
+
+/// Add a folder as a sync target
+#[tauri::command]
+pub fn add_folder_target(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<TargetInfo, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let target = manager
+        .add_folder_as_target(PathBuf::from(&path))
+        .map_err(|e| e.to_string())?;
+    Ok(TargetInfo::from(&target))
 }
 
 /// Remove a custom target

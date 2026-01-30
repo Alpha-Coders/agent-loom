@@ -50,7 +50,7 @@ pub enum Error {
     MissingSkillFile(PathBuf),
 
     /// Failed to parse skill frontmatter
-    #[error("Invalid frontmatter in {path}: {message}")]
+    #[error("{message}")]
     InvalidFrontmatter { path: PathBuf, message: String },
 
     /// Skill validation failed

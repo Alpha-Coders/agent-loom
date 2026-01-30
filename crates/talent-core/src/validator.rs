@@ -43,11 +43,16 @@ impl Validator {
 
     /// Validate a skill, updating its validation status
     pub fn validate(&self, skill: &mut Skill) -> Result<()> {
-        // Preserve any loading errors (these indicate frontmatter issues)
+        // Preserve any loading errors (these indicate frontmatter/YAML issues)
         let loading_errors: Vec<String> = skill
             .validation_errors
             .iter()
-            .filter(|e| e.contains("frontmatter") || e.contains("auto-fixed"))
+            .filter(|e| {
+                e.contains("frontmatter")
+                    || e.contains("auto-fixed")
+                    || e.contains("Invalid YAML")
+                    || e.contains("YAML")
+            })
             .cloned()
             .collect();
 
