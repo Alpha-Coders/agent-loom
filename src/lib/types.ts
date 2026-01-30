@@ -77,3 +77,22 @@ export interface ImportResultInfo {
   errors: [string, string][];
   synced_to: number;
 }
+
+// === Folder Import Types ===
+
+export interface ScannedSkillInfo {
+  name: string;
+  description: string;
+  source_path: string;
+  needs_fixes: boolean;
+  fixes_preview: string[];
+  has_conflict: boolean;
+  existing_description: string | null;
+}
+
+export interface FolderImportSelectionInfo {
+  name: string;
+  source_path: string;
+  apply_fixes: boolean;
+  resolution: 'import' | 'skip' | 'overwrite';
+}

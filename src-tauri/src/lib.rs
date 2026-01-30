@@ -117,6 +117,56 @@ impl ImportSelectionInfo {
     }
 }
 
+/// Scanned skill from external folder for import UI
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScannedSkillInfo {
+    pub name: String,
+    pub description: String,
+    pub source_path: String,
+    pub needs_fixes: bool,
+    pub fixes_preview: Vec<String>,
+    pub has_conflict: bool,
+    pub existing_description: Option<String>,
+}
+
+impl From<&talent_core::ScannedSkill> for ScannedSkillInfo {
+    fn from(skill: &talent_core::ScannedSkill) -> Self {
+        Self {
+            name: skill.name.clone(),
+            description: skill.description.clone(),
+            source_path: skill.source_path.display().to_string(),
+            needs_fixes: skill.needs_fixes,
+            fixes_preview: skill.fixes_preview.clone(),
+            has_conflict: skill.conflict.is_some(),
+            existing_description: skill.conflict.as_ref().map(|c| c.existing_description.clone()),
+        }
+    }
+}
+
+/// Import selection from folder scan UI
+#[derive(Debug, Clone, Deserialize)]
+pub struct FolderImportSelectionInfo {
+    pub name: String,
+    pub source_path: String,
+    pub apply_fixes: bool,
+    pub resolution: String,
+}
+
+impl FolderImportSelectionInfo {
+    pub fn to_core(&self) -> talent_core::FolderImportSelection {
+        talent_core::FolderImportSelection {
+            name: self.name.clone(),
+            source_path: PathBuf::from(&self.source_path),
+            apply_fixes: self.apply_fixes,
+            resolution: match self.resolution.as_str() {
+                "skip" => ConflictResolution::Skip,
+                "overwrite" => ConflictResolution::Overwrite,
+                _ => ConflictResolution::Import,
+            },
+        }
+    }
+}
+
 /// Import result for frontend
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportResultInfo {
@@ -181,6 +231,9 @@ pub fn run() {
             commands::get_available_target_types,
             // Menu state
             commands::set_save_menu_enabled,
+            // Folder import
+            commands::scan_folder_for_skills,
+            commands::import_from_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

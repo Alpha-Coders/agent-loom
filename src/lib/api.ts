@@ -1,7 +1,7 @@
 // API wrapper for Tauri commands
 
 import { invoke } from '@tauri-apps/api/core';
-import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, DiscoveredSkillInfo, ImportSelectionInfo, ImportResultInfo } from './types';
+import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, DiscoveredSkillInfo, ImportSelectionInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './types';
 
 export async function getSkills(): Promise<SkillInfo[]> {
   return invoke<SkillInfo[]>('get_skills');
@@ -107,4 +107,14 @@ export async function fixAllSkills(): Promise<[string, string[]][]> {
 
 export async function setSaveMenuEnabled(enabled: boolean): Promise<void> {
   return invoke<void>('set_save_menu_enabled', { enabled });
+}
+
+// Folder import
+
+export async function scanFolderForSkills(path: string): Promise<ScannedSkillInfo[]> {
+  return invoke<ScannedSkillInfo[]>('scan_folder_for_skills', { path });
+}
+
+export async function importFromFolder(selections: FolderImportSelectionInfo[]): Promise<ImportResultInfo> {
+  return invoke<ImportResultInfo>('import_from_folder', { selections });
 }
