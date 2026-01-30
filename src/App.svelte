@@ -378,7 +378,7 @@
                     target instanceof HTMLTextAreaElement ||
                     (target instanceof HTMLElement && target.closest('.cm-editor'));
 
-    // Keyboard shortcuts (Cmd+S for save - native menu handles Cmd+N, Cmd+R, etc.)
+    // Let native menu shortcuts pass through (Cmd+W, Cmd+N, Cmd+R, Cmd+Q, etc.)
     if (event.metaKey || event.ctrlKey) {
       switch (event.key) {
         case 's':
@@ -387,6 +387,12 @@
             event.preventDefault();
             handleSaveSkill();
           }
+          return;
+        case 'w':
+        case 'n':
+        case 'r':
+        case 'q':
+          // Let these pass through to native menu handlers
           return;
       }
     }
@@ -496,6 +502,8 @@
               type="text"
               placeholder="Skills path..."
               bind:value={customTargetPath}
+              autocorrect="off"
+              autocapitalize="off"
             />
             <div class="form-actions">
               <button onclick={() => showAddTargetForm = false}>Cancel</button>
@@ -595,6 +603,8 @@
             placeholder="my-awesome-skill"
             bind:value={newSkillName}
             autofocus
+            autocorrect="off"
+            autocapitalize="off"
           />
           {#if newSkillName.trim()}
             <div class="field-hint">
@@ -610,6 +620,8 @@
             placeholder="What does this skill do?"
             bind:value={newSkillDescription}
             rows="2"
+            autocorrect="off"
+            autocapitalize="off"
           ></textarea>
         </div>
 

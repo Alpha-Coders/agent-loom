@@ -46,6 +46,7 @@
         ]),
         markdown(),
         oneDark,
+        EditorView.lineWrapping,
         updateListener,
         EditorView.theme({
           '&': {
