@@ -198,6 +198,8 @@ pub fn run() {
             commands::add_custom_target,
             commands::remove_custom_target,
             commands::get_available_target_types,
+            // Menu state
+            commands::set_save_menu_enabled,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

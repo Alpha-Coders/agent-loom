@@ -1,14 +1,26 @@
 //! Application menu with standard macOS shortcuts
 
 use tauri::{
-    menu::{Menu, PredefinedMenuItem, Submenu},
+    menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu},
     AppHandle, Emitter, Manager, Wry,
 };
 
 /// Menu item IDs for custom actions
 pub const NEW_SKILL_ID: &str = "new-skill";
+pub const SAVE_ID: &str = "save";
 pub const SYNC_ALL_ID: &str = "sync-all";
 pub const REFRESH_ID: &str = "refresh";
+
+/// Update the enabled state of the Save menu item
+pub fn set_save_enabled(app: &AppHandle, enabled: bool) {
+    if let Some(menu) = app.menu() {
+        if let Some(item) = menu.get(SAVE_ID) {
+            if let Some(menu_item) = item.as_menuitem() {
+                let _ = menu_item.set_enabled(enabled);
+            }
+        }
+    }
+}
 
 /// Create the application menu with standard macOS shortcuts
 pub fn create_menu(app: &AppHandle) -> Result<Menu<Wry>, tauri::Error> {
@@ -37,6 +49,13 @@ pub fn create_menu(app: &AppHandle) -> Result<Menu<Wry>, tauri::Error> {
     file_menu.append(&new_skill)?;
 
     file_menu.append(&PredefinedMenuItem::separator(app)?)?;
+
+    // Save (Cmd+S) - disabled by default, enabled when editing with changes
+    let save = MenuItemBuilder::with_id(SAVE_ID, "Save")
+        .accelerator("CmdOrCtrl+S")
+        .enabled(false)
+        .build(app)?;
+    file_menu.append(&save)?;
 
     // Sync All (Cmd+Shift+S)
     let sync_all = tauri::menu::MenuItemBuilder::with_id(SYNC_ALL_ID, "Sync All")
@@ -84,6 +103,12 @@ pub fn handle_menu_event(app: &AppHandle, event: &tauri::menu::MenuEvent) {
             // Emit event to frontend
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.emit("menu-new-skill", ());
+            }
+        }
+        SAVE_ID => {
+            // Emit event to frontend
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.emit("menu-save", ());
             }
         }
         SYNC_ALL_ID => {
