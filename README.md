@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128.png" alt="Agent Skills Manager Logo" width="128" height="128">
+  <img src="src-tauri/icons/128x128.png" alt="AgentLoom Logo" width="128" height="128">
 </p>
 
-<h1 align="center">Agent Skills Manager</h1>
+<h1 align="center">AgentLoom</h1>
 
 <p align="center">
   <strong>One place to manage all your AI agent skills</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Alpha-Coders/agent-skills-manager/releases"><img src="https://img.shields.io/github/v/release/Alpha-Coders/agent-skills-manager?style=flat-square" alt="Release"></a>
+  <a href="https://github.com/Alpha-Coders/agent-loom/releases"><img src="https://img.shields.io/github/v/release/Alpha-Coders/agent-loom?style=flat-square" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
-  <a href="https://github.com/Alpha-Coders/agent-skills-manager/actions"><img src="https://img.shields.io/github/actions/workflow/status/Alpha-Coders/agent-skills-manager/release.yml?style=flat-square" alt="Build"></a>
+  <a href="https://github.com/Alpha-Coders/agent-loom/actions"><img src="https://img.shields.io/github/actions/workflow/status/Alpha-Coders/agent-loom/release.yml?style=flat-square" alt="Build"></a>
 </p>
 
 <p align="center">
@@ -24,14 +24,14 @@
 
 ---
 
-## What is Agent Skills Manager?
+## What is AgentLoom?
 
-Agent Skills Manager is a desktop app that lets you manage AI agent skills from a single location. It works with any tool that supports the [agentskills.io](https://agentskills.io) open format. Instead of manually copying skills to each tool's directory, it maintains a central repository and syncs them via symlinks.
+AgentLoom is a desktop app that lets you manage AI agent skills from a single location. It works with any tool that supports the [agentskills.io](https://agentskills.io) open format. Instead of manually copying skills to each tool's directory, it maintains a central repository and syncs them via symlinks.
 
 ```
-~/.claude/skills/my-skill           →  ~/.agentskills/skills/my-skill
-~/.cursor/skills-cursor/my-skill    →  ~/.agentskills/skills/my-skill
-~/.codex/skills/my-skill            →  ~/.agentskills/skills/my-skill
+~/.claude/skills/my-skill           →  ~/.agentloom/skills/my-skill
+~/.cursor/skills-cursor/my-skill    →  ~/.agentloom/skills/my-skill
+~/.codex/skills/my-skill            →  ~/.agentloom/skills/my-skill
 ```
 
 ## Features
@@ -45,7 +45,7 @@ Agent Skills Manager is a desktop app that lets you manage AI agent skills from 
 
 ## Supported Tools
 
-Agent Skills Manager works with any tool that supports the [agentskills.io](https://agentskills.io) specification:
+AgentLoom works with any tool that supports the [agentskills.io](https://agentskills.io) specification:
 
 | Tool | Vendor | Skills Directory |
 |------|--------|------------------|
@@ -72,14 +72,14 @@ Get the latest release for your platform:
 
 | Platform | Download |
 |----------|----------|
-| macOS (Apple Silicon) | [Download](https://github.com/Alpha-Coders/agent-skills-manager/releases/latest) |
-| macOS (Intel) | [Download](https://github.com/Alpha-Coders/agent-skills-manager/releases/latest) |
-| Windows | [Download](https://github.com/Alpha-Coders/agent-skills-manager/releases/latest) |
-| Linux | [Download](https://github.com/Alpha-Coders/agent-skills-manager/releases/latest) |
+| macOS (Apple Silicon) | [Download](https://github.com/Alpha-Coders/agent-loom/releases/latest) |
+| macOS (Intel) | [Download](https://github.com/Alpha-Coders/agent-loom/releases/latest) |
+| Windows | [Download](https://github.com/Alpha-Coders/agent-loom/releases/latest) |
+| Linux | [Download](https://github.com/Alpha-Coders/agent-loom/releases/latest) |
 
 ### macOS
 
-1. Unzip and drag `Agent Skills Manager.app` to Applications
+1. Unzip and drag `AgentLoom.app` to Applications
 2. On first run, right-click → Open (to bypass Gatekeeper)
 
 ### Windows
@@ -89,8 +89,8 @@ Run the installer and follow the prompts.
 ### Linux
 
 ```bash
-chmod +x AgentSkillsManager-*.AppImage
-./AgentSkillsManager-*.AppImage
+chmod +x AgentLoom-*.AppImage
+./AgentLoom-*.AppImage
 ```
 
 ## Development

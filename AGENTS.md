@@ -24,7 +24,7 @@ Load `agents/core.md` plus your project's language overlay:
 ## File Structure
 
 ```
-agent-skills-manager/
+agent-loom/
 ├── AGENTS.md               # This file (entry point, source of truth)
 ├── CLAUDE.md -> AGENTS.md  # Symlink for Claude Code
 ├── .claude/
@@ -38,9 +38,9 @@ agent-skills-manager/
 │   └── TEMPLATE.md         # Plan format template
 ├── Cargo.toml              # Rust workspace config
 ├── crates/                 # Rust crates
-│   ├── talent-core/        # Core library (asm-core)
-│   └── talent-cli/         # CLI application (asm-cli)
-├── src-tauri/              # Tauri backend (asm-app)
+│   ├── talent-core/        # Core library (agentloom-core)
+│   └── talent-cli/         # CLI application (agentloom-cli)
+├── src-tauri/              # Tauri backend (agentloom)
 ├── src/                    # Svelte frontend
 └── package.json            # Frontend dependencies
 ```
@@ -130,7 +130,7 @@ When asked to commit and push:
 |---------|-------------|
 | `cargo build` | Build all Rust crates |
 | `cargo test` | Run Rust tests |
-| `cargo test -p asm-core` | Run core library tests only |
+| `cargo test -p agentloom-core` | Run core library tests only |
 | `cargo clippy` | Lint Rust code |
 | `cargo fmt` | Format Rust code |
 | `npm install` | Install frontend dependencies |
@@ -139,8 +139,8 @@ When asked to commit and push:
 
 ### Project Overview
 
-**Agent Skills Manager** is a cross-platform GUI application for managing Agent Skills across multiple AI CLI tools:
-- Central skill storage in `~/.agentskills/skills/`
+**AgentLoom** is a cross-platform GUI application for managing Agent Skills across multiple AI CLI tools:
+- Central skill storage in `~/.agentloom/skills/`
 - Symlink syncing to: Claude Code, Codex, Gemini, Cursor, Amp, Goose
 - Validation engine for skill quality
 - Built-in markdown editor

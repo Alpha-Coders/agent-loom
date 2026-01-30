@@ -1,10 +1,10 @@
 # Architecture
 
-This document describes the technical architecture of Agent Skills Manager.
+This document describes the technical architecture of AgentLoom.
 
 ## Overview
 
-Agent Skills Manager is built with a Rust backend (Tauri v2) and a Svelte 5 frontend. It works with any tool that supports the [agentskills.io](https://agentskills.io) open format. The core logic lives in a separate `asm-core` crate, making it reusable across the GUI app and CLI.
+AgentLoom is built with a Rust backend (Tauri v2) and a Svelte 5 frontend. It works with any tool that supports the [agentskills.io](https://agentskills.io) open format. The core logic lives in a separate `agentloom-core` crate, making it reusable across the GUI app and CLI.
 
 ## System Diagram
 
@@ -32,7 +32,7 @@ flowchart TB
 
     subgraph Backend["Rust Backend"]
         direction TB
-        TauriApp["asm-app<br/>(src-tauri)"]
+        TauriApp["agentloom<br/>(src-tauri)"]
         Commands["Tauri Commands<br/>get_skills, sync_all, etc."]
 
         TauriApp --> Commands
@@ -40,7 +40,7 @@ flowchart TB
 
     subgraph Core["Core Library"]
         direction TB
-        CoreLib["asm-core<br/>(crates/talent-core)"]
+        CoreLib["agentloom-core<br/>(crates/talent-core)"]
 
         subgraph Modules["Modules"]
             Manager["SkillManager"]
@@ -53,12 +53,12 @@ flowchart TB
     end
 
     subgraph CLI["CLI Application"]
-        CLIApp["asm-cli<br/>(clap)"]
+        CLIApp["agentloom-cli<br/>(clap)"]
     end
 
     subgraph Storage["File System"]
         direction TB
-        AppDir["~/.agentskills/"]
+        AppDir["~/.agentloom/"]
         SkillsDir["skills/<br/>Central Repository"]
         ConfigFile["config.toml"]
 
@@ -106,17 +106,17 @@ flowchart TB
 
 1. **User Interaction** → Svelte UI captures events
 2. **Frontend → Backend** → `invoke()` calls Tauri commands
-3. **Commands → Core** → Business logic in `asm-core`
+3. **Commands → Core** → Business logic in `agentloom-core`
 4. **Core → File System** → Read/write skills, create symlinks
 5. **File System → Targets** → Symlinks point to central skill storage
 
 ## Project Structure
 
 ```
-agent-skills-manager/
+agent-loom/
 ├── Cargo.toml                    # Workspace configuration
 ├── crates/
-│   ├── talent-core/              # Core library (asm-core)
+│   ├── talent-core/              # Core library (agentloom-core)
 │   │   └── src/
 │   │       ├── config.rs         # Configuration management
 │   │       ├── error.rs          # Error types
@@ -125,9 +125,9 @@ agent-skills-manager/
 │   │       ├── validator.rs      # Skill validation
 │   │       ├── syncer.rs         # Symlink synchronization
 │   │       └── manager.rs        # Integration layer
-│   └── talent-cli/               # CLI application (asm-cli)
+│   └── talent-cli/               # CLI application (agentloom-cli)
 │       └── src/main.rs
-├── src-tauri/                    # Tauri backend (asm-app)
+├── src-tauri/                    # Tauri backend (agentloom)
 │   └── src/
 │       ├── main.rs
 │       ├── lib.rs
@@ -152,7 +152,7 @@ agent-skills-manager/
 ## Storage Layout
 
 ```
-~/.agentskills/
+~/.agentloom/
 ├── config.toml          # Application configuration
 └── skills/              # Central skill storage
     ├── my-skill/
@@ -160,30 +160,30 @@ agent-skills-manager/
     └── another-skill/
         └── SKILL.md
 
-# Target tools create symlinks to ~/.agentskills/skills/*
+# Target tools create symlinks to ~/.agentloom/skills/*
 ```
 
 ## CLI Reference
 
 ```bash
 # Sync skills to all targets
-agentskillsmanager sync
+agentloom sync
 
 # Sync to specific target
-agentskillsmanager sync --target claude
+agentloom sync --target claude
 
 # List all skills
-agentskillsmanager list
+agentloom list
 
 # Create new skill
-agentskillsmanager create my-skill
+agentloom create my-skill
 
 # Validate skills
-agentskillsmanager validate
+agentloom validate
 
 # Show targets
-agentskillsmanager targets
+agentloom targets
 
 # Diagnose issues
-agentskillsmanager doctor
+agentloom doctor
 ```

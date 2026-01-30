@@ -1,4 +1,4 @@
-//! Talent Core - Agent Skills Manager Library
+//! AgentLoom Core Library
 //!
 //! This crate provides the core functionality for managing agent skills:
 //! - Skill discovery and parsing

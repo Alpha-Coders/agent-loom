@@ -4,7 +4,7 @@
 
 ---
 
-## Project: Talent
+## Project: AgentLoom
 
 A cross-platform GUI application for managing Agent Skills across multiple AI CLI tools (Claude Code, Codex, Gemini, Cursor, Amp, Goose).
 
@@ -25,10 +25,10 @@ A cross-platform GUI application for managing Agent Skills across multiple AI CL
 ## Architecture
 
 ```
-talent/
+agent-loom/
 ├── Cargo.toml                    # Workspace configuration
 ├── crates/
-│   ├── talent-core/              # Core library (pure Rust)
+│   ├── talent-core/              # Core library (agentloom-core)
 │   │   └── src/
 │   │       ├── config.rs         # Configuration management
 │   │       ├── error.rs          # Error types (thiserror)
@@ -38,9 +38,9 @@ talent/
 │   │       ├── syncer.rs         # Symlink synchronization
 │   │       ├── watcher.rs        # File system watching (notify)
 │   │       └── manager.rs        # Integration layer
-│   └── talent-cli/               # CLI application (clap)
+│   └── talent-cli/               # CLI application (agentloom-cli)
 │       └── src/main.rs
-├── src-tauri/                    # Tauri backend
+├── src-tauri/                    # Tauri backend (agentloom)
 │   └── src/
 │       ├── main.rs               # Entry point
 │       ├── lib.rs                # Tauri setup

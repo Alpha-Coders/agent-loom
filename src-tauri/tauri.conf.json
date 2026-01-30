@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Agent Skills Manager",
+  "productName": "AgentLoom",
   "version": "1.0.0",
-  "identifier": "com.agentskillsmanager.app",
+  "identifier": "com.agentloom.app",
   "build": {
     "beforeDevCommand": "npm run dev:vite",
     "devUrl": "http://localhost:5173",
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Agent Skills Manager",
+        "title": "AgentLoom",
         "width": 1280,
         "height": 720,
         "minWidth": 1240,

@@ -1,11 +1,11 @@
 {
-  "name": "agent-skills-manager",
+  "name": "agentloom",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Alpha-Coders/agent-skills-manager.git"
+    "url": "https://github.com/Alpha-Coders/agent-loom.git"
   },
   "scripts": {
     "dev": "node scripts/dev.js",

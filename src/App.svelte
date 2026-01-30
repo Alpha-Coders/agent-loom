@@ -655,6 +655,9 @@
 
     loadData();
 
+    // Get window reference for close handling
+    const currentWindow = getCurrentWindow();
+
     // Listen for menu events
     unlistenFns.push(await listen('menu-new-skill', () => {
       showNewSkillForm = true;
@@ -684,7 +687,6 @@
     }));
 
     // Handle window close with unsaved changes confirmation
-    const currentWindow = getCurrentWindow();
     unlistenFns.push(await currentWindow.onCloseRequested(async (event) => {
       if (hasAnyUnsavedWork) {
         event.preventDefault();
@@ -958,7 +960,7 @@
             <div class="field-hint">
               Lowercase letters, numbers, and hyphens only.
               {#if newSkillName.trim()}
-                <br />Creates: <code>~/.agentskills/skills/{newSkillName.trim().toLowerCase().replace(/\s+/g, '-')}/</code>
+                <br />Creates: <code>~/.agentloom/skills/{newSkillName.trim().toLowerCase().replace(/\s+/g, '-')}/</code>
               {/if}
             </div>
           </div>
