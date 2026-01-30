@@ -26,7 +26,7 @@
 
 ## What is Agent Skills Manager?
 
-Agent Skills Manager is a desktop app that lets you manage AI agent skills from a single location. Instead of manually copying skills to each tool's directory, it maintains a central repository and syncs them via symlinks.
+Agent Skills Manager is a desktop app that lets you manage AI agent skills from a single location. It works with any tool that supports the [agentskills.io](https://agentskills.io) open format. Instead of manually copying skills to each tool's directory, it maintains a central repository and syncs them via symlinks.
 
 ```
 ~/.claude/skills/my-skill           →  ~/.agentskills/skills/my-skill
@@ -42,10 +42,6 @@ Agent Skills Manager is a desktop app that lets you manage AI agent skills from 
 - **Validation** — Validates skills against the [agentskills.io](https://agentskills.io) specification
 - **Import** — Import existing skills from any target or folder
 - **Cross-Platform** — Works on macOS, Windows, and Linux
-
-## Supported Tools
-
-Works with any AI coding tool that supports the [agentskills.io](https://agentskills.io) open format, including Claude Code, Cursor, Codex, Gemini CLI, and more.
 
 ## Installation
 
