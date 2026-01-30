@@ -406,7 +406,7 @@ mod tests {
         let syncer = Syncer::new();
 
         // First sync - creates symlink
-        let result1 = syncer.sync_target(&target, &[skill.clone()]);
+        let result1 = syncer.sync_target(&target, std::slice::from_ref(&skill));
         assert_eq!(result1.created.len(), 1);
 
         // Second sync - should be unchanged
