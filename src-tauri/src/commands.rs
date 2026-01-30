@@ -350,3 +350,9 @@ pub fn fix_all_skills(state: tauri::State<'_, AppState>) -> Result<Vec<(String, 
 
     Ok(results)
 }
+
+/// Set the enabled state of the Save menu item
+#[tauri::command]
+pub fn set_save_menu_enabled(app: tauri::AppHandle, enabled: bool) {
+    crate::menu::set_save_enabled(&app, enabled);
+}

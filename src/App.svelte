@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { ask } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill } from './lib/api';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill, setSaveMenuEnabled } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
 
@@ -64,6 +64,11 @@
   }
 
   let hasUnsavedChanges = $derived(editorContent !== originalContent);
+
+  // Update Save menu enabled state when editing state changes
+  $effect(() => {
+    setSaveMenuEnabled(editingSkill !== null && hasUnsavedChanges);
+  });
 
   // Filtered skills based on sidebar selection
   let filteredSkills = $derived(() => {
@@ -378,23 +383,10 @@
                     target instanceof HTMLTextAreaElement ||
                     (target instanceof HTMLElement && target.closest('.cm-editor'));
 
-    // Let native menu shortcuts pass through (Cmd+W, Cmd+N, Cmd+R, Cmd+Q, etc.)
+    // Let ALL Cmd/Ctrl+key combos pass through to native menu handlers
+    // (Cmd+S, Cmd+W, Cmd+N, Cmd+R, Cmd+Q, Cmd+H, Cmd+M, Cmd+Z, Cmd+C, Cmd+V, etc.)
     if (event.metaKey || event.ctrlKey) {
-      switch (event.key) {
-        case 's':
-          // Cmd+S saves current skill (Cmd+Shift+S is sync all via menu)
-          if (!event.shiftKey && editingSkill && hasUnsavedChanges) {
-            event.preventDefault();
-            handleSaveSkill();
-          }
-          return;
-        case 'w':
-        case 'n':
-        case 'r':
-        case 'q':
-          // Let these pass through to native menu handlers
-          return;
-      }
+      return;
     }
 
     if (event.key === 'Escape') {
@@ -433,6 +425,12 @@
 
     unlistenFns.push(await listen('menu-refresh', () => {
       handleRefresh();
+    }));
+
+    unlistenFns.push(await listen('menu-save', () => {
+      if (editingSkill && hasUnsavedChanges) {
+        handleSaveSkill();
+      }
     }));
 
     document.addEventListener('keydown', handleKeydown);

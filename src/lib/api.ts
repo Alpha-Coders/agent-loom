@@ -102,3 +102,9 @@ export async function fixSkill(name: string): Promise<SkillInfo> {
 export async function fixAllSkills(): Promise<[string, string[]][]> {
   return invoke<[string, string[]][]>('fix_all_skills');
 }
+
+// Menu state
+
+export async function setSaveMenuEnabled(enabled: boolean): Promise<void> {
+  return invoke<void>('set_save_menu_enabled', { enabled });
+}
