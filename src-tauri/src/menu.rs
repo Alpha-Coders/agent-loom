@@ -1,7 +1,7 @@
 //! Application menu with standard macOS shortcuts
 
 use tauri::{
-    menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu},
+    menu::{AboutMetadataBuilder, Menu, MenuItemBuilder, PredefinedMenuItem, Submenu},
     AppHandle, Emitter, Manager, Wry,
 };
 
@@ -28,7 +28,17 @@ pub fn create_menu(app: &AppHandle) -> Result<Menu<Wry>, tauri::Error> {
 
     // App menu (Agent Skills Manager)
     let app_menu = Submenu::new(app, "Agent Skills Manager", true)?;
-    app_menu.append(&PredefinedMenuItem::about(app, Some("About Agent Skills Manager"), None)?)?;
+    let about_metadata = AboutMetadataBuilder::new()
+        .authors(Some(vec!["Alpha Coders".to_string()]))
+        .copyright(Some("© 2025 Alpha Coders"))
+        .website(Some("https://github.com/Alpha-Coders/agent-skills-manager"))
+        .website_label(Some("GitHub"))
+        .build();
+    app_menu.append(&PredefinedMenuItem::about(
+        app,
+        Some("About Agent Skills Manager"),
+        Some(about_metadata),
+    )?)?;
     app_menu.append(&PredefinedMenuItem::separator(app)?)?;
     app_menu.append(&PredefinedMenuItem::services(app, None)?)?;
     app_menu.append(&PredefinedMenuItem::separator(app)?)?;
