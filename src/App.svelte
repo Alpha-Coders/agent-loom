@@ -4,7 +4,7 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, addFolderTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder } from './lib/api';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, addFolderTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
@@ -800,7 +800,7 @@
             <RotateCcw class="icon" size={16} strokeWidth={1.5} />
           </span>
         </button>
-        <button class="pane-action" onclick={handleImport} disabled={isImporting} title="Import from targets">
+        <button class="pane-action" onclick={handleImport} disabled={isImporting} title="Import skills from AI tools">
           <Download class="icon" size={16} strokeWidth={1.5} />
         </button>
         <button class="pane-action" onclick={handleFolderPickerImport} disabled={isScanning} title="Import from folder">
@@ -949,7 +949,7 @@
             <input
               id="skill-name"
               type="text"
-              placeholder="example-skill-name"
+              placeholder="my-awesome-skill"
               bind:value={newSkillName}
               autofocus
               autocapitalize="off"
@@ -1716,6 +1716,7 @@
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     line-height: 1.4;
   }

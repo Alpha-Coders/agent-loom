@@ -124,7 +124,7 @@ fn main() {
         }) => cmd_import(all, overwrite, json, dry_run),
         None => {
             println!("Agent Skills Manager");
-            println!("Run 'agentskillsmanager--help' for usage");
+            println!("Run 'agentskillsmanager --help' for usage");
             Ok(())
         }
     };
@@ -439,7 +439,7 @@ fn cmd_create(name: &str, description: &str) -> Result<(), Box<dyn std::error::E
     let skill = manager.create_skill(name, description)?;
     println!("Created skill: {}", skill.name());
     println!("  Path: {}", skill.path.display());
-    println!("\nEdit the SKILL.md file to add content, then run 'agentskillsmanagersync' to deploy.");
+    println!("\nEdit the SKILL.md file to add content, then run 'agentskillsmanager sync' to deploy.");
 
     Ok(())
 }
