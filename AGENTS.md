@@ -139,7 +139,7 @@ When asked to commit and push:
 
 ### Project Overview
 
-**Agent Skills Manager (ASM)** is a cross-platform GUI application for managing Agent Skills across multiple AI CLI tools:
+**Agent Skills Manager** is a cross-platform GUI application for managing Agent Skills across multiple AI CLI tools:
 - Central skill storage in `~/.agentskills/skills/`
 - Symlink syncing to: Claude Code, Codex, Gemini, Cursor, Amp, Goose
 - Validation engine for skill quality
