@@ -54,29 +54,29 @@ Filename: plans/20260130-simplified-add-target.md
 
 ## Steps
 
-1. [ ] **Update backend** - Add `add_folder_target` command in commands.rs
+1. [x] **Update backend** - Add `add_folder_target` command in commands.rs
    - Accept path string
-   - Create target with auto-generated ID (e.g., "custom-{hash}" or folder name)
+   - Create target with auto-generated ID (e.g., "folder-{name}")
    - Display name from folder path
 
-2. [ ] **Update manager** - Add `add_folder_as_target(path: PathBuf)` method
+2. [x] **Update manager** - Add `add_folder_as_target(path: PathBuf)` method
    - Creates Target with custom path
    - Generate unique ID from path
    - Add to targets list and persist
 
-3. [ ] **Update frontend API** - Add `addFolderTarget(path: string)` in api.ts
+3. [x] **Update frontend API** - Add `addFolderTarget(path: string)` in api.ts
 
-4. [ ] **Update frontend UI** - Replace add target form with folder picker flow
+4. [x] **Update frontend UI** - Replace add target form with folder picker flow
    - Remove dropdown and input field
    - Remove `handleShowAddTarget()` function
-   - Update `nav-section-action` button to directly open folder picker
+   - Update button to directly open folder picker
    - On folder selection, call `addFolderTarget()`
    - Show success snackbar with target name
 
-5. [ ] **Remove dead code**
-   - Remove `get_available_target_types` command (or deprecate)
-   - Remove `getAvailableTargetTypes` from api.ts
-   - Remove related state variables from App.svelte
+5. [x] **Remove dead code**
+   - Removed old form state variables from App.svelte
+   - Removed unused CSS for add target form
+   - `get_available_target_types` kept for potential future use
 
 6. [ ] **Test end-to-end**
    - Add custom folder target
@@ -86,15 +86,17 @@ Filename: plans/20260130-simplified-add-target.md
 
 ## Implementation State
 
-- State: not-started
-- Current step: 1
+- State: in-progress
+- Current step: 6
 - Last updated: 2026-01-30
 - Checkpoints:
   - 2026-01-30 not-started Plan created
+  - 2026-01-30 in-progress Steps 1-5 completed
 
 ## Status Updates
 
 - 2026-01-30 not-started Initial plan created
+- 2026-01-30 in-progress Backend and frontend implementation complete
 
 ## Dependencies
 

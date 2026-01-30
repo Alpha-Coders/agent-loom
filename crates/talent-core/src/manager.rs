@@ -215,6 +215,55 @@ impl SkillManager {
         Ok(())
     }
 
+    /// Add a folder as a sync target
+    ///
+    /// Creates a custom target from any folder path. The ID and name are derived
+    /// from the path. Returns the created target.
+    pub fn add_folder_as_target(&mut self, path: PathBuf) -> Result<Target> {
+        // Generate ID from path (use folder name, make it lowercase and kebab-case)
+        let folder_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("folder");
+
+        // Create a unique ID: folder-<name>
+        let base_id = format!("folder-{}", folder_name.to_lowercase().replace(' ', "-"));
+
+        // Check if this exact path is already a target
+        if self.targets.iter().any(|t| t.skills_path == path) {
+            return Err(Error::TargetAlreadyExists(path.display().to_string()));
+        }
+
+        // Make ID unique if needed
+        let mut target_id = base_id.clone();
+        let mut counter = 1;
+        while self.targets.iter().any(|t| t.id() == target_id) {
+            target_id = format!("{}-{}", base_id, counter);
+            counter += 1;
+        }
+
+        // Derive display name from path
+        let display_name = folder_name.to_string();
+
+        // Create the target
+        let mut target = Target::new_folder(path.clone(), target_id.clone(), display_name);
+        target.enabled = true;
+
+        // Ensure the directory exists
+        target.ensure_skills_dir()?;
+
+        // Add to targets list
+        self.targets.push(target.clone());
+
+        // Update config and save
+        let target_config = self.config.get_or_create_target(&target_id);
+        target_config.enabled = true;
+        target_config.skills_path = Some(path);
+        self.config.save()?;
+
+        Ok(target)
+    }
+
     /// Remove a custom target (only works for non-auto-detected targets)
     pub fn remove_custom_target(&mut self, target_id: &str) -> Result<()> {
         // Find the target

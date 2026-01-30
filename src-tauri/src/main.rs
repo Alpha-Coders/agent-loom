@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    asm_app_lib::run()
+    agent_skills_manager_lib::run()
 }

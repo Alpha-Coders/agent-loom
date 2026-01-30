@@ -7,14 +7,16 @@ use crate::{
 use std::path::PathBuf;
 use asm_core::{check_filemerge_available, open_filemerge, Importer, SyncResult, TargetInfo};
 
-/// Get all skills
+/// Get all skills (sorted alphabetically by name)
 #[tauri::command]
 pub fn get_skills(state: tauri::State<'_, AppState>) -> Result<Vec<SkillInfo>, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    Ok(manager.skills().iter().map(SkillInfo::from).collect())
+    let mut skills: Vec<SkillInfo> = manager.skills().iter().map(SkillInfo::from).collect();
+    skills.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(skills)
 }
 
-/// Get all targets with sync status
+/// Get all targets with sync status (sorted alphabetically by name)
 #[tauri::command]
 pub fn get_targets(state: tauri::State<'_, AppState>) -> Result<Vec<TargetInfo>, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
@@ -23,9 +25,11 @@ pub fn get_targets(state: tauri::State<'_, AppState>) -> Result<Vec<TargetInfo>,
     let skill_names: Vec<String> = manager.skills().iter().map(|s| s.folder_name().to_string()).collect();
     let skills_dir = manager.config().skills_dir.clone();
 
-    Ok(manager.targets().iter().map(|t| {
+    let mut targets: Vec<TargetInfo> = manager.targets().iter().map(|t| {
         TargetInfo::from_target(t, Some(&skill_names), Some(&skills_dir))
-    }).collect())
+    }).collect();
+    targets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(targets)
 }
 
 /// Sync all skills to all targets
@@ -66,20 +70,24 @@ pub fn validate_skill(state: tauri::State<'_, AppState>, name: String) -> Result
     Ok(SkillInfo::from(skill))
 }
 
-/// Validate all skills
+/// Validate all skills (sorted alphabetically by name)
 #[tauri::command]
 pub fn validate_all(state: tauri::State<'_, AppState>) -> Result<Vec<SkillInfo>, String> {
     let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
     manager.validate_all();
-    Ok(manager.skills().iter().map(SkillInfo::from).collect())
+    let mut skills: Vec<SkillInfo> = manager.skills().iter().map(SkillInfo::from).collect();
+    skills.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(skills)
 }
 
-/// Refresh skills from disk
+/// Refresh skills from disk (sorted alphabetically by name)
 #[tauri::command]
 pub fn refresh_skills(state: tauri::State<'_, AppState>) -> Result<Vec<SkillInfo>, String> {
     let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
     manager.refresh_skills().map_err(|e| e.to_string())?;
-    Ok(manager.skills().iter().map(SkillInfo::from).collect())
+    let mut skills: Vec<SkillInfo> = manager.skills().iter().map(SkillInfo::from).collect();
+    skills.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(skills)
 }
 
 /// Delete a skill

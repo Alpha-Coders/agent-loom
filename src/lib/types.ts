@@ -24,6 +24,13 @@ export interface SkillInfo {
   validation_errors: string[];
 }
 
+export interface SyncStatus {
+  is_synced: boolean;
+  missing_skills: string[];
+  extra_items: string[];
+  broken_links: string[];
+}
+
 export interface TargetInfo {
   id: string;
   name: string;
@@ -31,6 +38,7 @@ export interface TargetInfo {
   auto_detected: boolean;
   enabled: boolean;
   exists: boolean;
+  sync_status: SyncStatus | null;
 }
 
 export interface SyncResult {

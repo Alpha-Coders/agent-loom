@@ -227,6 +227,7 @@ pub fn run() {
             commands::toggle_target,
             commands::set_target_enabled,
             commands::add_custom_target,
+            commands::add_folder_target,
             commands::remove_custom_target,
             commands::get_available_target_types,
             // Menu state

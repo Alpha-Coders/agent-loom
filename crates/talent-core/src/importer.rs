@@ -152,6 +152,12 @@ impl Importer {
 
     /// Scan a single target for importable skills
     fn scan_target(&self, target: &Target) -> Result<Vec<DiscoveredSkill>> {
+        // Skip custom folder targets (they don't have a TargetKind)
+        let target_kind = match target.kind {
+            Some(kind) => kind,
+            None => return Ok(Vec::new()),
+        };
+
         let skills_path = &target.skills_path;
 
         if !skills_path.exists() {
@@ -191,7 +197,7 @@ impl Importer {
                     name: skill.meta.name,
                     description: skill.meta.description,
                     source_path: path,
-                    source_target: target.kind,
+                    source_target: target_kind,
                     conflict,
                 });
             }

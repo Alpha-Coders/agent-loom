@@ -140,18 +140,22 @@
         {@const isExpanded = expandedSkills.has(skill.source_path)}
         {@const hasDetails = skill.needs_fixes || skill.has_conflict}
 
-        <div class="skill-item" class:selected={isSelected} class:needs-attention={skill.has_conflict || skill.needs_fixes}>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="skill-item"
+          class:selected={isSelected}
+          class:needs-attention={skill.has_conflict || skill.needs_fixes}
+          onclick={() => !isImporting && toggleSkill(skill.source_path)}
+        >
           <div class="skill-row">
-            <label class="skill-checkbox">
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onchange={() => toggleSkill(skill.source_path)}
-                disabled={isImporting}
-              />
-            </label>
+            <div class="skill-checkbox" class:checked={isSelected}>
+              {#if isSelected}
+                <Check size={12} strokeWidth={3} />
+              {/if}
+            </div>
 
-            <div class="skill-info" onclick={() => hasDetails && toggleExpand(skill.source_path)}>
+            <div class="skill-info">
               <div class="skill-name-row">
                 <span class="skill-name">{skill.name}</span>
                 <div class="skill-badges">
@@ -175,13 +179,12 @@
                 </div>
               </div>
               <div class="skill-description">{skill.description}</div>
-              <div class="skill-path">{skill.source_path}</div>
             </div>
 
             {#if hasDetails}
               <button
                 class="expand-button"
-                onclick={() => toggleExpand(skill.source_path)}
+                onclick={(e) => { e.stopPropagation(); toggleExpand(skill.source_path); }}
                 disabled={isImporting}
               >
                 {#if isExpanded}
@@ -194,7 +197,9 @@
           </div>
 
           {#if isExpanded && hasDetails}
-            <div class="skill-details">
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="skill-details" onclick={(e) => e.stopPropagation()}>
               {#if skill.needs_fixes && skill.fixes_preview.length > 0}
                 <div class="detail-section">
                   <div class="detail-header">
@@ -285,7 +290,9 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -299,26 +306,30 @@
   }
 
   .modal {
-    width: 600px;
+    width: 640px;
     max-width: 90vw;
     max-height: 80vh;
     background: var(--color-sidebar);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--color-border);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow:
+      0 24px 80px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(255, 255, 255, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
-    animation: slide-up 0.2s ease-out;
+    animation: modal-appear 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    overflow: hidden;
   }
 
-  @keyframes slide-up {
+  @keyframes modal-appear {
     from {
       opacity: 0;
-      transform: translateY(20px);
+      transform: translateY(16px) scale(0.97);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
     }
   }
 
@@ -326,25 +337,25 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-4) var(--space-5);
-    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-5) var(--space-6);
+    background: var(--color-sidebar);
   }
 
   .modal-header h2 {
     margin: 0;
-    font-size: var(--font-lg);
+    font-size: var(--font-xl);
     font-weight: var(--font-weight-semibold);
   }
 
   .close-button {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     padding: 0;
-    background: none;
+    background: var(--color-surface);
     border: none;
     color: var(--color-text-muted);
     cursor: pointer;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -353,7 +364,7 @@
 
   .close-button:hover:not(:disabled) {
     color: var(--color-text);
-    background: var(--color-surface);
+    background: var(--color-surface-hover);
   }
 
   .close-button:disabled {
@@ -363,24 +374,33 @@
 
   .modal-subheader {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-5);
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-6);
+    border-top: 1px solid var(--color-border);
     border-bottom: 1px solid var(--color-border);
     background: var(--color-bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
   }
 
   .select-all {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-3);
     font-size: var(--font-sm);
-    color: var(--color-text-secondary);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
     cursor: pointer;
   }
 
   .select-all input {
+    width: 18px;
+    height: 18px;
     cursor: pointer;
+    accent-color: var(--color-primary);
   }
 
   .attention-banner {
@@ -388,8 +408,7 @@
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
-    background: rgba(255, 159, 10, 0.12);
-    border: 1px solid rgba(255, 159, 10, 0.3);
+    background: rgba(255, 159, 10, 0.1);
     border-radius: var(--radius-md);
     font-size: var(--font-xs);
     font-weight: var(--font-weight-medium);
@@ -400,14 +419,25 @@
     flex: 1;
     overflow-y: auto;
     min-height: 200px;
+    background: var(--color-bg);
   }
 
   .skill-item {
     border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .skill-item:hover {
+    background: rgba(255, 255, 255, 0.03);
   }
 
   .skill-item.selected {
-    background: rgba(10, 132, 255, 0.08);
+    background: var(--color-primary-muted);
+  }
+
+  .skill-item.selected:hover {
+    background: rgba(10, 132, 255, 0.22);
   }
 
   .skill-item.needs-attention {
@@ -415,57 +445,67 @@
   }
 
   .skill-item.needs-attention .skill-row {
-    padding-left: calc(var(--space-5) - 3px);
+    padding-left: calc(var(--space-6) - 3px);
   }
 
   .skill-row {
     display: flex;
     align-items: flex-start;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-5);
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
   }
 
   .skill-checkbox {
     flex-shrink: 0;
-    padding-top: 2px;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    border: 2px solid var(--color-text-dim);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    background: transparent;
   }
 
-  .skill-checkbox input {
-    cursor: pointer;
+  .skill-checkbox.checked {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
   }
 
   .skill-info {
     flex: 1;
     min-width: 0;
-    cursor: pointer;
   }
 
   .skill-name-row {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-3);
     flex-wrap: wrap;
-    margin-bottom: 2px;
+    margin-bottom: var(--space-2);
   }
 
   .skill-name {
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-medium);
+    font-size: var(--font-base);
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text);
   }
 
   .skill-badges {
     display: flex;
-    gap: var(--space-1);
+    gap: var(--space-2);
   }
 
   .badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 6px;
+    padding: 3px 8px;
     border-radius: var(--radius-sm);
-    font-size: 10px;
+    font-size: var(--font-xs);
     font-weight: var(--font-weight-medium);
     text-transform: uppercase;
     letter-spacing: 0.02em;
@@ -473,35 +513,35 @@
 
   .badge-valid {
     background: rgba(48, 209, 88, 0.15);
+    color: #1a7f37;
+  }
+
+  :global([data-theme="dark"]) .badge-valid {
     color: var(--color-success);
   }
 
   .badge-fixes {
-    background: rgba(255, 159, 10, 0.15);
+    background: rgba(255, 159, 10, 0.18);
+    color: #9a6700;
+  }
+
+  :global([data-theme="dark"]) .badge-fixes {
     color: var(--color-warning);
   }
 
   .badge-conflict {
     background: rgba(255, 69, 58, 0.15);
+    color: #cf222e;
+  }
+
+  :global([data-theme="dark"]) .badge-conflict {
     color: var(--color-error);
   }
 
   .skill-description {
-    font-size: var(--font-xs);
-    color: var(--color-text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .skill-path {
-    font-size: 10px;
-    color: var(--color-text-dim);
-    font-family: 'SF Mono', Monaco, monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin-top: 2px;
+    font-size: var(--font-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.4;
   }
 
   .expand-button {
@@ -633,17 +673,17 @@
   .modal-footer {
     display: flex;
     justify-content: flex-end;
-    gap: var(--space-2);
-    padding: var(--space-4) var(--space-5);
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-6);
     border-top: 1px solid var(--color-border);
-    background: var(--color-bg);
+    background: var(--color-sidebar);
   }
 
   .cancel-button,
   .import-button {
-    padding: var(--space-2) var(--space-4);
+    padding: var(--space-3) var(--space-5);
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     font-size: var(--font-sm);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
@@ -652,7 +692,7 @@
 
   .cancel-button {
     background: var(--color-surface);
-    color: var(--color-text-secondary);
+    color: var(--color-text);
   }
 
   .cancel-button:hover:not(:disabled) {
@@ -662,15 +702,22 @@
   .import-button {
     background: var(--color-primary);
     color: white;
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
   }
 
   .import-button:hover:not(:disabled) {
     background: var(--color-primary-hover);
+    box-shadow: 0 4px 12px rgba(10, 132, 255, 0.4);
+  }
+
+  .import-button:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   .cancel-button:disabled,
   .import-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    box-shadow: none;
   }
 </style>
