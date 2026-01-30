@@ -6,10 +6,15 @@
 //! - Quit application
 
 use tauri::{
+    include_image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, Runtime,
 };
+
+/// Embedded tray icon as a template image (22x22 monochrome with alpha)
+/// macOS will automatically use @2x variant and handle dark/light mode
+const TRAY_ICON: tauri::image::Image<'static> = include_image!("icons/trayIconTemplate.png");
 
 /// Menu item IDs for tray context menu
 pub mod ids {
@@ -28,9 +33,10 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     // Build the menu
     let menu = Menu::with_items(app, &[&show_item, &sync_item, &quit_item])?;
 
-    // Build and configure the tray icon
+    // Build and configure the tray icon with embedded template image
     let _tray = TrayIconBuilder::new()
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(TRAY_ICON.clone())
+        .icon_as_template(true) // macOS: treat as template for auto dark/light mode
         .menu(&menu)
         .show_menu_on_left_click(false)
         .tooltip("Talent - Agent Skills Manager")
