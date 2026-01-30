@@ -57,10 +57,11 @@ jobs:
           prefix-key: validate
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        # Only validate library crates - Tauri app requires frontend to be built
+        run: cargo clippy -p talent-core -p talent-cli --all-targets -- -D warnings
 
       - name: Run tests
-        run: cargo test --workspace
+        run: cargo test -p talent-core -p talent-cli
 
   build:
     needs: [validate]
