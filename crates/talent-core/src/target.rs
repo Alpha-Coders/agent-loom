@@ -353,7 +353,7 @@ fn check_sync_status(target: &Target, central_skill_names: &[String], skills_dir
 
     let target_path = &target.skills_path;
 
-    // Get items in target directory
+    // Get items in target directory (excluding hidden files/folders like .DS_Store, .system)
     let target_items: std::collections::HashSet<String> = if target_path.exists() {
         fs::read_dir(target_path)
             .ok()
@@ -361,6 +361,7 @@ fn check_sync_status(target: &Target, central_skill_names: &[String], skills_dir
                 entries
                     .filter_map(|e| e.ok())
                     .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
+                    .filter(|name| !name.starts_with('.'))
                     .collect()
             })
             .unwrap_or_default()
