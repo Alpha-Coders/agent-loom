@@ -4,7 +4,7 @@ This document describes the technical architecture of Agent Skills Manager.
 
 ## Overview
 
-Agent Skills Manager is built with a Rust backend (Tauri v2) and a Svelte 5 frontend. The core logic lives in a separate `asm-core` crate, making it reusable across the GUI app and CLI.
+Agent Skills Manager is built with a Rust backend (Tauri v2) and a Svelte 5 frontend. It works with any tool that supports the [agentskills.io](https://agentskills.io) open format. The core logic lives in a separate `asm-core` crate, making it reusable across the GUI app and CLI.
 
 ## System Diagram
 
@@ -40,7 +40,7 @@ flowchart TB
 
     subgraph Core["Core Library"]
         direction TB
-        ASMCore["asm-core<br/>(crates/talent-core)"]
+        CoreLib["asm-core<br/>(crates/talent-core)"]
 
         subgraph Modules["Modules"]
             Manager["SkillManager"]
@@ -49,31 +49,25 @@ flowchart TB
             Config["Config<br/>(TOML)"]
         end
 
-        ASMCore --> Modules
+        CoreLib --> Modules
     end
 
     subgraph CLI["CLI Application"]
-        ASMCLI["asm-cli<br/>(clap)"]
+        CLIApp["asm-cli<br/>(clap)"]
     end
 
     subgraph Storage["File System"]
         direction TB
-        ASMDir["~/.agentskills/"]
+        AppDir["~/.agentskills/"]
         SkillsDir["skills/<br/>Central Repository"]
         ConfigFile["config.toml"]
 
-        ASMDir --> SkillsDir
-        ASMDir --> ConfigFile
+        AppDir --> SkillsDir
+        AppDir --> ConfigFile
     end
 
-    subgraph Targets["AI CLI Tools"]
-        direction LR
-        Claude["Claude Code<br/>~/.claude/skills/"]
-        Codex["Codex<br/>~/.codex/skills/"]
-        Gemini["Gemini<br/>~/.gemini/skills/"]
-        Cursor["Cursor<br/>~/.cursor/skills-cursor/"]
-        Amp["Amp<br/>~/.amp/skills/"]
-        Goose["Goose<br/>~/.goose/skills/"]
+    subgraph Targets["AI Tools"]
+        TargetTools["agentskills.io<br/>compatible tools"]
     end
 
     %% Connections
@@ -83,8 +77,8 @@ flowchart TB
     Menu -->|"Events"| IPC
     Window --> WebView
 
-    Commands --> ASMCore
-    ASMCLI --> ASMCore
+    Commands --> CoreLib
+    CLIApp --> CoreLib
 
     Manager --> Validator
     Manager --> Syncer
@@ -103,9 +97,9 @@ flowchart TB
 
     class Svelte,TS,Vite,CM frontend
     class WebView,IPC,Menu,Window tauri
-    class TauriApp,Commands,ASMCore,Manager,Validator,Syncer,Config,ASMCLI rust
-    class ASMDir,SkillsDir,ConfigFile storage
-    class Claude,Codex,Gemini,Cursor,Amp,Goose targets
+    class TauriApp,Commands,CoreLib,Manager,Validator,Syncer,Config,CLIApp rust
+    class AppDir,SkillsDir,ConfigFile storage
+    class TargetTools targets
 ```
 
 ## Data Flow
@@ -166,32 +160,30 @@ agent-skills-manager/
     └── another-skill/
         └── SKILL.md
 
-~/.claude/skills/        # Symlinks → ~/.agentskills/skills/*
-~/.codex/skills/         # Symlinks → ~/.agentskills/skills/*
-~/.gemini/skills/        # Symlinks → ~/.agentskills/skills/*
+# Target tools create symlinks to ~/.agentskills/skills/*
 ```
 
 ## CLI Reference
 
 ```bash
 # Sync skills to all targets
-agentskillsmanagersync
+agentskillsmanager sync
 
 # Sync to specific target
-agentskillsmanagersync --target claude
+agentskillsmanager sync --target claude
 
 # List all skills
-agentskillsmanagerlist
+agentskillsmanager list
 
 # Create new skill
-agentskillsmanagercreate my-skill
+agentskillsmanager create my-skill
 
 # Validate skills
-agentskillsmanagervalidate
+agentskillsmanager validate
 
 # Show targets
-agentskillsmanagertargets
+agentskillsmanager targets
 
 # Diagnose issues
-agentskillsmanagerdoctor
+agentskillsmanager doctor
 ```
