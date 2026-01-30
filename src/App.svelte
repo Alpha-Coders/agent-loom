@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
   import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
   import ConfirmDeleteModal from './lib/ConfirmDeleteModal.svelte';
   import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill, setSaveMenuEnabled, scanFolderForSkills, importFromFolder } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
-  import { Plus, RefreshCw, Download, X, Sparkles, Trash2, FolderOpen } from 'lucide-svelte';
+  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen } from 'lucide-svelte';
 
   // State using Svelte 5 runes
   let skills = $state<SkillInfo[]>([]);
@@ -78,6 +79,8 @@
   }
 
   let hasUnsavedChanges = $derived(editorContent !== originalContent);
+  let hasNewSkillFormInput = $derived(newSkillName.trim() !== '' || newSkillDescription.trim() !== '');
+  let hasAnyUnsavedWork = $derived(hasUnsavedChanges || (showNewSkillForm && hasNewSkillFormInput));
 
   // Update Save menu enabled state when editing state changes
   $effect(() => {
@@ -181,6 +184,19 @@
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
+  }
+
+  async function handleCloseNewSkillForm() {
+    if (hasNewSkillFormInput) {
+      const confirmed = await ask('You have unsaved changes. Discard new skill?', {
+        title: 'Unsaved Changes',
+        kind: 'warning',
+      });
+      if (!confirmed) return;
+    }
+    newSkillName = '';
+    newSkillDescription = '';
+    showNewSkillForm = false;
   }
 
   function handleDeleteSkill(skill: SkillInfo, event: MouseEvent) {
@@ -539,7 +555,7 @@
     if (event.key === 'Escape') {
       event.preventDefault();
       if (showNewSkillForm) {
-        showNewSkillForm = false;
+        handleCloseNewSkillForm();
       } else if (editingSkill) {
         handleCloseEditor();
       }
@@ -577,6 +593,23 @@
     unlistenFns.push(await listen('menu-save', () => {
       if (editingSkill && hasUnsavedChanges) {
         handleSaveSkill();
+      }
+    }));
+
+    // Handle window close with unsaved changes confirmation
+    const currentWindow = getCurrentWindow();
+    unlistenFns.push(await currentWindow.onCloseRequested(async (event) => {
+      if (hasAnyUnsavedWork) {
+        event.preventDefault();
+        const confirmed = await ask('You have unsaved changes. Are you sure you want to quit?', {
+          title: 'Unsaved Changes',
+          kind: 'warning',
+          okLabel: 'Quit',
+          cancelLabel: 'Cancel',
+        });
+        if (confirmed) {
+          await currentWindow.destroy();
+        }
       }
     }));
 
@@ -699,7 +732,7 @@
         <!-- Import Group -->
         <div class="toolbar-group">
           <button class="toolbar-button" onclick={handleRefresh} disabled={isLoading} title="Refresh skill list">
-            <RefreshCw class="icon" size={14} strokeWidth={1.5} />
+            <RotateCcw class="icon" size={14} strokeWidth={1.5} />
           </button>
           <button class="toolbar-button" onclick={handleImport} disabled={isImporting} title="Import from targets">
             <Download class="icon" size={14} strokeWidth={1.5} />
@@ -746,7 +779,7 @@
             <Sparkles class="icon" size={16} strokeWidth={1.5} />
             <span>New Skill</span>
           </div>
-          <button class="form-close" onclick={() => showNewSkillForm = false} title="Cancel (Esc)">
+          <button class="form-close" onclick={handleCloseNewSkillForm} title="Cancel (Esc)">
             <X class="icon" size={16} strokeWidth={1.5} />
           </button>
         </div>
@@ -783,7 +816,7 @@
         </div>
 
         <div class="form-actions">
-          <button class="form-btn" onclick={() => showNewSkillForm = false}>Cancel</button>
+          <button class="form-btn" onclick={handleCloseNewSkillForm}>Cancel</button>
           <button class="form-btn primary" onclick={handleCreateSkill} disabled={!newSkillName.trim() || !newSkillDescription.trim()}>
             <Plus class="icon-sm" size={14} strokeWidth={2} />
             Create Skill
@@ -911,6 +944,10 @@
         <div class="placeholder-icon">◇</div>
         <p>Select a skill to edit</p>
         <p class="placeholder-hint">or press <kbd>⌘N</kbd> to create new</p>
+        <button class="placeholder-action" onclick={() => showNewSkillForm = true}>
+          <Plus class="icon" size={14} strokeWidth={2} />
+          <span>New Skill</span>
+        </button>
       </div>
     </div>
   {/if}
@@ -2139,6 +2176,32 @@
     border-radius: var(--radius-sm);
     font-family: inherit;
     font-size: var(--font-xs);
+  }
+
+  .placeholder-action {
+    margin-top: var(--space-5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: 10px var(--space-5);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  }
+
+  .placeholder-action:hover {
+    background: var(--color-primary-hover);
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+  }
+
+  .placeholder-action:active {
+    transform: scale(0.97);
   }
 
   /* ============================================
