@@ -1759,9 +1759,6 @@
 
   .editor-header {
     background: var(--color-sidebar);
-    align-items: center;
-    padding-top: var(--space-4);
-    padding-bottom: var(--space-2);
   }
 
   .editor-title {
