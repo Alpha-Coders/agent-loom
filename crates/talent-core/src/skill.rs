@@ -114,6 +114,163 @@ pub fn to_kebab_case(input: &str) -> String {
     result
 }
 
+/// Result of normalizing frontmatter
+#[derive(Debug, Clone)]
+pub struct NormalizeResult {
+    /// The normalized YAML content
+    pub yaml: String,
+    /// List of fixes that were applied
+    pub fixes: Vec<String>,
+    /// Whether any fixes were made
+    pub was_modified: bool,
+}
+
+/// Normalize YAML frontmatter to fix common issues
+///
+/// Fixes applied:
+/// - Converts non-string metadata values to strings (arrays become comma-separated)
+/// - Ensures name exists (uses folder_name fallback)
+/// - Ensures description exists (uses placeholder)
+/// - Converts name to kebab-case if needed
+pub fn normalize_frontmatter(yaml_content: &str, folder_name: &str) -> NormalizeResult {
+    let mut fixes = Vec::new();
+
+    // Parse as generic YAML Value
+    let mut value: serde_yaml::Value = match serde_yaml::from_str(yaml_content) {
+        Ok(v) => v,
+        Err(_) => {
+            // Can't even parse as generic YAML - return minimal valid frontmatter
+            fixes.push("Replaced unparseable YAML with minimal frontmatter".to_string());
+            return NormalizeResult {
+                yaml: format!(
+                    "name: {}\ndescription: Skill imported with invalid frontmatter",
+                    folder_name
+                ),
+                fixes,
+                was_modified: true,
+            };
+        }
+    };
+
+    let map = match value.as_mapping_mut() {
+        Some(m) => m,
+        None => {
+            fixes.push("YAML root was not a mapping, replaced with minimal frontmatter".to_string());
+            return NormalizeResult {
+                yaml: format!(
+                    "name: {}\ndescription: Skill imported with invalid frontmatter",
+                    folder_name
+                ),
+                fixes,
+                was_modified: true,
+            };
+        }
+    };
+
+    // Fix: Ensure name exists and is kebab-case
+    let name_key = serde_yaml::Value::String("name".to_string());
+    let current_name = map
+        .get(&name_key)
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    match current_name {
+        Some(name) if !is_valid_skill_name(&name) => {
+            let fixed_name = to_kebab_case(&name);
+            fixes.push(format!("Converted name '{}' to kebab-case '{}'", name, fixed_name));
+            map.insert(name_key.clone(), serde_yaml::Value::String(fixed_name));
+        }
+        None => {
+            fixes.push(format!("Added missing name field: '{}'", folder_name));
+            map.insert(name_key.clone(), serde_yaml::Value::String(folder_name.to_string()));
+        }
+        _ => {}
+    }
+
+    // Fix: Ensure description exists
+    let desc_key = serde_yaml::Value::String("description".to_string());
+    if !map.contains_key(&desc_key) {
+        fixes.push("Added missing description field".to_string());
+        map.insert(
+            desc_key,
+            serde_yaml::Value::String("No description provided".to_string()),
+        );
+    }
+
+    // Fix: Convert metadata values to strings
+    let metadata_key = serde_yaml::Value::String("metadata".to_string());
+    if let Some(metadata) = map.get_mut(&metadata_key) {
+        if let Some(meta_map) = metadata.as_mapping_mut() {
+            let keys_to_fix: Vec<_> = meta_map
+                .iter()
+                .filter(|(_, v)| !v.is_string())
+                .map(|(k, _)| k.clone())
+                .collect();
+
+            for key in keys_to_fix {
+                if let Some(val) = meta_map.get(&key) {
+                    let key_str = key.as_str().unwrap_or("unknown");
+                    let string_val = yaml_value_to_string(val);
+                    fixes.push(format!(
+                        "Converted metadata.{} from complex type to string",
+                        key_str
+                    ));
+                    meta_map.insert(key.clone(), serde_yaml::Value::String(string_val));
+                }
+            }
+        }
+    }
+
+    let was_modified = !fixes.is_empty();
+
+    // Re-serialize
+    let yaml = serde_yaml::to_string(&value).unwrap_or_else(|_| yaml_content.to_string());
+    // Remove trailing newline that serde_yaml adds
+    let yaml = yaml.trim_end().to_string();
+
+    NormalizeResult {
+        yaml,
+        fixes,
+        was_modified,
+    }
+}
+
+/// Convert any YAML value to a string representation
+fn yaml_value_to_string(value: &serde_yaml::Value) -> String {
+    match value {
+        serde_yaml::Value::Null => String::new(),
+        serde_yaml::Value::Bool(b) => b.to_string(),
+        serde_yaml::Value::Number(n) => n.to_string(),
+        serde_yaml::Value::String(s) => s.clone(),
+        serde_yaml::Value::Sequence(seq) => {
+            // Convert array to comma-separated string
+            seq.iter()
+                .filter_map(|v| {
+                    if v.is_string() {
+                        v.as_str().map(|s| s.to_string())
+                    } else {
+                        Some(yaml_value_to_string(v))
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+        serde_yaml::Value::Mapping(map) => {
+            // Convert mapping to JSON-like string
+            let pairs: Vec<String> = map
+                .iter()
+                .filter_map(|(k, v)| {
+                    let key = k.as_str()?;
+                    let val = yaml_value_to_string(v);
+                    Some(format!("{}={}", key, val))
+                })
+                .collect();
+            pairs.join("; ")
+        }
+        serde_yaml::Value::Tagged(tagged) => yaml_value_to_string(&tagged.value),
+    }
+}
+
 /// Skill metadata parsed from YAML frontmatter
 /// See https://agentskills.io/specification for the full spec
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -208,6 +365,128 @@ impl Skill {
             validation_status: ValidationStatus::Unknown,
             validation_errors: Vec::new(),
         })
+    }
+
+    /// Load a skill leniently - always returns a Skill, capturing errors instead of failing.
+    /// This allows displaying broken skills to users with error badges.
+    pub fn load_lenient(skill_dir: &Path) -> Self {
+        let skill_file = skill_dir.join(SKILL_FILE_NAME);
+        let folder_name = skill_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        // Try to read the file
+        let contents = match fs::read_to_string(&skill_file) {
+            Ok(c) => c,
+            Err(e) => {
+                return Self {
+                    meta: SkillMeta {
+                        name: folder_name.clone(),
+                        description: format!("Failed to read: {}", e),
+                        ..Default::default()
+                    },
+                    content: String::new(),
+                    path: skill_dir.to_path_buf(),
+                    validation_status: ValidationStatus::Invalid,
+                    validation_errors: vec![format!("Cannot read SKILL.md: {}", e)],
+                };
+            }
+        };
+
+        // Try to parse frontmatter
+        match Self::parse_frontmatter(&contents, &skill_file) {
+            Ok((meta, content)) => Self {
+                meta,
+                content,
+                path: skill_dir.to_path_buf(),
+                validation_status: ValidationStatus::Unknown,
+                validation_errors: Vec::new(),
+            },
+            Err(e) => {
+                // Parsing failed - try normalizing the frontmatter
+                let (partial_meta, raw_content, normalize_result) =
+                    Self::parse_with_normalization(&contents, &folder_name);
+
+                let mut errors = vec![e.to_string()];
+                if normalize_result.was_modified {
+                    errors.push(format!(
+                        "Frontmatter can be auto-fixed: {}",
+                        normalize_result.fixes.join(", ")
+                    ));
+                }
+
+                Self {
+                    meta: partial_meta,
+                    content: raw_content,
+                    path: skill_dir.to_path_buf(),
+                    validation_status: ValidationStatus::Invalid,
+                    validation_errors: errors,
+                }
+            }
+        }
+    }
+
+    /// Try to parse frontmatter, normalizing if needed
+    fn parse_with_normalization(
+        contents: &str,
+        folder_name: &str,
+    ) -> (SkillMeta, String, NormalizeResult) {
+        let trimmed = contents.trim_start();
+
+        // Extract YAML section
+        if !trimmed.starts_with("---") {
+            let result = NormalizeResult {
+                yaml: format!("name: {}\ndescription: No frontmatter found", folder_name),
+                fixes: vec!["Added missing frontmatter".to_string()],
+                was_modified: true,
+            };
+            return (
+                SkillMeta {
+                    name: folder_name.to_string(),
+                    description: "No frontmatter found".to_string(),
+                    ..Default::default()
+                },
+                contents.to_string(),
+                result,
+            );
+        }
+
+        let after_first = &trimmed[3..];
+        let (yaml_content, content) = match after_first.find("\n---") {
+            Some(end_idx) => (
+                after_first[..end_idx].trim().to_string(),
+                after_first[end_idx + 4..].trim().to_string(),
+            ),
+            None => (after_first.trim().to_string(), String::new()),
+        };
+
+        // Try normalizing the YAML
+        let normalize_result = normalize_frontmatter(&yaml_content, folder_name);
+
+        // Try parsing the normalized YAML
+        let meta = serde_yaml::from_str::<SkillMeta>(&normalize_result.yaml).unwrap_or_else(|_| {
+            // Even normalized YAML failed - use lenient extraction
+            let mut meta = SkillMeta {
+                name: folder_name.to_string(),
+                description: String::new(),
+                ..Default::default()
+            };
+            if let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(&yaml_content) {
+                if let Some(map) = value.as_mapping() {
+                    if let Some(name) = map.get("name").and_then(|v| v.as_str()) {
+                        meta.name = name.to_string();
+                    }
+                    if let Some(desc) = map.get("description").and_then(|v| v.as_str()) {
+                        meta.description = desc.to_string();
+                    }
+                }
+            }
+            meta
+        });
+
+        (meta, content, normalize_result)
     }
 
     /// Parse YAML frontmatter from content
@@ -323,9 +602,68 @@ description: {}
 
         Ok(())
     }
+
+    /// Fix frontmatter issues and save the skill
+    ///
+    /// Returns the list of fixes applied, or empty if no fixes were needed.
+    pub fn fix_frontmatter(&mut self) -> Result<Vec<String>> {
+        let skill_file = self.path.join(SKILL_FILE_NAME);
+        let contents = fs::read_to_string(&skill_file).map_err(|e| Error::io(&skill_file, e))?;
+        let trimmed = contents.trim_start();
+
+        // Extract current frontmatter boundaries
+        if !trimmed.starts_with("---") {
+            // No frontmatter - create one
+            let new_content = format!(
+                "---\nname: {}\ndescription: {}\n---\n\n{}",
+                self.folder_name(),
+                if self.meta.description.is_empty() {
+                    "No description provided"
+                } else {
+                    &self.meta.description
+                },
+                contents
+            );
+            self.save_content(&new_content)?;
+            return Ok(vec!["Added missing frontmatter".to_string()]);
+        }
+
+        let after_first = &trimmed[3..];
+        let Some(end_idx) = after_first.find("\n---") else {
+            // Unclosed frontmatter - can't safely fix
+            return Ok(Vec::new());
+        };
+
+        let yaml_content = after_first[..end_idx].trim();
+        let body_content = after_first[end_idx + 4..].trim();
+
+        // Normalize the YAML
+        let normalize_result = normalize_frontmatter(yaml_content, self.folder_name());
+
+        if !normalize_result.was_modified {
+            return Ok(Vec::new());
+        }
+
+        // Rebuild the file with normalized frontmatter
+        let new_content = format!("---\n{}\n---\n\n{}", normalize_result.yaml, body_content);
+
+        self.save_content(&new_content)?;
+
+        Ok(normalize_result.fixes)
+    }
+
+    /// Check if this skill has fixable frontmatter issues
+    pub fn has_fixable_errors(&self) -> bool {
+        !self.validation_errors.is_empty()
+            && self
+                .validation_errors
+                .iter()
+                .any(|e| e.contains("can be auto-fixed"))
+    }
 }
 
 /// Discover all skills in a directory
+/// Uses lenient loading to include skills with errors (for UI display with error badges)
 pub fn discover_skills(skills_dir: &Path) -> Result<Vec<Skill>> {
     if !skills_dir.exists() {
         return Ok(Vec::new());
@@ -344,13 +682,16 @@ pub fn discover_skills(skills_dir: &Path) -> Result<Vec<Skill>> {
         // Look for SKILL.md files
         if path.file_name().is_some_and(|n| n == SKILL_FILE_NAME) {
             if let Some(skill_dir) = path.parent() {
-                match Skill::load(skill_dir) {
-                    Ok(skill) => skills.push(skill),
-                    Err(e) => {
-                        // Log but continue discovering other skills
-                        eprintln!("Warning: Failed to load skill at {}: {}", skill_dir.display(), e);
-                    }
+                // Use lenient loading to capture errors instead of skipping
+                let skill = Skill::load_lenient(skill_dir);
+                if !skill.validation_errors.is_empty() {
+                    eprintln!(
+                        "Warning: Skill '{}' has errors: {}",
+                        skill.folder_name(),
+                        skill.validation_errors.join(", ")
+                    );
                 }
+                skills.push(skill);
             }
         }
     }
@@ -523,5 +864,175 @@ This is the new content.
         assert_eq!(skill.meta.tags, vec!["new-tag"]);
         assert!(skill.content.contains("This is the new content"));
         assert_eq!(skill.validation_status, ValidationStatus::Unknown);
+    }
+
+    #[test]
+    fn load_lenient_captures_yaml_errors() {
+        let temp = TempDir::new().unwrap();
+        let skill_dir = temp.path().join("broken-skill");
+        fs::create_dir(&skill_dir).unwrap();
+
+        // Create skill with invalid YAML (metadata.triggers is array, but expected string)
+        create_skill_file(
+            &skill_dir,
+            r#"---
+name: broken-skill
+description: A skill with invalid metadata
+metadata:
+  triggers:
+    - item1
+    - item2
+---
+
+# Broken Skill
+
+Content here.
+"#,
+        );
+
+        // Strict load should fail
+        let strict_result = Skill::load(&skill_dir);
+        assert!(strict_result.is_err());
+
+        // Lenient load should succeed with errors captured
+        let skill = Skill::load_lenient(&skill_dir);
+        assert_eq!(skill.name(), "broken-skill");
+        assert_eq!(skill.description(), "A skill with invalid metadata");
+        assert_eq!(skill.validation_status, ValidationStatus::Invalid);
+        assert!(!skill.validation_errors.is_empty());
+        assert!(skill.validation_errors[0].contains("metadata"));
+    }
+
+    #[test]
+    fn discover_includes_broken_skills() {
+        let temp = TempDir::new().unwrap();
+        let skills_dir = temp.path();
+
+        // Create a valid skill
+        Skill::create(skills_dir, "valid-skill", "Works fine").unwrap();
+
+        // Create a broken skill
+        let broken_dir = skills_dir.join("broken-skill");
+        fs::create_dir(&broken_dir).unwrap();
+        create_skill_file(
+            &broken_dir,
+            r#"---
+name: broken-skill
+description: Has invalid fields
+metadata:
+  bad_field:
+    - not
+    - a
+    - string
+---
+
+Content
+"#,
+        );
+
+        let skills = discover_skills(skills_dir).unwrap();
+        assert_eq!(skills.len(), 2);
+
+        // Both skills should be present
+        let valid = skills.iter().find(|s| s.name() == "valid-skill").unwrap();
+        let broken = skills.iter().find(|s| s.name() == "broken-skill").unwrap();
+
+        assert!(valid.validation_errors.is_empty());
+        assert!(!broken.validation_errors.is_empty());
+        assert_eq!(broken.validation_status, ValidationStatus::Invalid);
+    }
+
+    #[test]
+    fn normalize_frontmatter_converts_array_metadata() {
+        let yaml = r#"name: test-skill
+description: A test
+metadata:
+  triggers:
+    - item1
+    - item2"#;
+
+        let result = normalize_frontmatter(yaml, "test-skill");
+
+        assert!(result.was_modified);
+        assert!(result.fixes.iter().any(|f| f.contains("metadata.triggers")));
+
+        // Verify the normalized YAML can be parsed
+        let meta: SkillMeta = serde_yaml::from_str(&result.yaml).unwrap();
+        assert_eq!(meta.name, "test-skill");
+        assert_eq!(meta.metadata.get("triggers"), Some(&"item1, item2".to_string()));
+    }
+
+    #[test]
+    fn normalize_frontmatter_adds_missing_fields() {
+        let yaml = "tags:\n  - test";
+
+        let result = normalize_frontmatter(yaml, "my-skill");
+
+        assert!(result.was_modified);
+        assert!(result.fixes.iter().any(|f| f.contains("missing name")));
+        assert!(result.fixes.iter().any(|f| f.contains("missing description")));
+
+        let meta: SkillMeta = serde_yaml::from_str(&result.yaml).unwrap();
+        assert_eq!(meta.name, "my-skill");
+        assert!(!meta.description.is_empty());
+    }
+
+    #[test]
+    fn normalize_frontmatter_converts_name_to_kebab_case() {
+        let yaml = r#"name: "Test Skill Name"
+description: A test"#;
+
+        let result = normalize_frontmatter(yaml, "folder");
+
+        assert!(result.was_modified);
+        assert!(result.fixes.iter().any(|f| f.contains("kebab-case")));
+
+        let meta: SkillMeta = serde_yaml::from_str(&result.yaml).unwrap();
+        assert_eq!(meta.name, "test-skill-name");
+    }
+
+    #[test]
+    fn normalize_frontmatter_no_changes_for_valid() {
+        let yaml = r#"name: valid-skill
+description: A valid skill"#;
+
+        let result = normalize_frontmatter(yaml, "valid-skill");
+
+        assert!(!result.was_modified);
+        assert!(result.fixes.is_empty());
+    }
+
+    #[test]
+    fn fix_frontmatter_saves_normalized_content() {
+        let temp = TempDir::new().unwrap();
+        let skill_dir = temp.path().join("broken-skill");
+        fs::create_dir(&skill_dir).unwrap();
+
+        create_skill_file(
+            &skill_dir,
+            r#"---
+name: broken-skill
+description: Has array metadata
+metadata:
+  triggers:
+    - item1
+    - item2
+---
+
+# Content
+
+Body here.
+"#,
+        );
+
+        let mut skill = Skill::load_lenient(&skill_dir);
+        assert!(skill.has_fixable_errors());
+
+        let fixes = skill.fix_frontmatter().unwrap();
+        assert!(!fixes.is_empty());
+
+        // Reload and verify it's now valid
+        let reloaded = Skill::load(&skill_dir).unwrap();
+        assert_eq!(reloaded.meta.metadata.get("triggers"), Some(&"item1, item2".to_string()));
     }
 }

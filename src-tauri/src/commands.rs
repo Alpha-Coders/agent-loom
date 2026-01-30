@@ -315,3 +315,38 @@ pub fn launch_filemerge(existing: String, incoming: String) -> Result<(), String
 
     open_filemerge(&existing_path, &incoming_path).map_err(|e| e.to_string())
 }
+
+// === Skill Fixing Commands ===
+
+/// Fix a skill's frontmatter issues automatically
+#[tauri::command]
+pub fn fix_skill(state: tauri::State<'_, AppState>, name: String) -> Result<SkillInfo, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+
+    // Fix the skill
+    let fixes = manager.fix_skill(&name).map_err(|e| e.to_string())?;
+
+    if !fixes.is_empty() {
+        eprintln!("Fixed skill '{}': {}", name, fixes.join(", "));
+    }
+
+    // Return updated skill info
+    let skill = manager
+        .get_skill(&name)
+        .ok_or_else(|| format!("Skill not found: {name}"))?;
+    Ok(SkillInfo::from(skill))
+}
+
+/// Fix all skills with frontmatter issues
+#[tauri::command]
+pub fn fix_all_skills(state: tauri::State<'_, AppState>) -> Result<Vec<(String, Vec<String>)>, String> {
+    let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+
+    let results = manager.fix_all_skills();
+
+    for (name, fixes) in &results {
+        eprintln!("Fixed skill '{}': {}", name, fixes.join(", "));
+    }
+
+    Ok(results)
+}

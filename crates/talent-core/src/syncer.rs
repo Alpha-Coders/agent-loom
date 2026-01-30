@@ -82,6 +82,11 @@ pub struct Syncer {
 
     /// Whether to create target directories if they don't exist
     pub create_dirs: bool,
+
+    /// Whether to automatically migrate non-symlink folders to symlinks
+    /// When true, if a real folder exists where a symlink should be, it will be
+    /// removed (since the skill already exists in Talent) and replaced with a symlink
+    pub auto_migrate: bool,
 }
 
 impl Default for Syncer {
@@ -89,6 +94,7 @@ impl Default for Syncer {
         Self {
             remove_stale: true,
             create_dirs: true,
+            auto_migrate: true,
         }
     }
 }
@@ -127,9 +133,16 @@ impl Syncer {
             let link_path = target.skill_link_path(skill.name());
             let target_path = &skill.path;
 
-            match self.create_symlink(&link_path, target_path) {
+            match self.create_symlink(&link_path, target_path, self.auto_migrate) {
                 Ok(SymlinkAction::Created) => {
                     result.created.push(skill.name().to_string());
+                }
+                Ok(SymlinkAction::Migrated) => {
+                    result.created.push(skill.name().to_string());
+                    eprintln!(
+                        "Migrated '{}': removed original folder, created symlink",
+                        skill.name()
+                    );
                 }
                 Ok(SymlinkAction::Unchanged) => {
                     result.unchanged.push(skill.name().to_string());
@@ -159,7 +172,15 @@ impl Syncer {
     }
 
     /// Create a symlink, handling existing paths
-    fn create_symlink(&self, link_path: &Path, target_path: &Path) -> Result<SymlinkAction> {
+    ///
+    /// If `auto_migrate` is true and a non-symlink exists at `link_path`,
+    /// it will be removed (since the skill exists in Talent) and replaced with a symlink.
+    fn create_symlink(
+        &self,
+        link_path: &Path,
+        target_path: &Path,
+        auto_migrate: bool,
+    ) -> Result<SymlinkAction> {
         // Check if something already exists at the link path
         if link_path.exists() || link_path.symlink_metadata().is_ok() {
             // Check if it's already a symlink
@@ -181,13 +202,37 @@ impl Syncer {
                     path: link_path.to_path_buf(),
                     message: e.to_string(),
                 })?;
+            } else if auto_migrate {
+                // Not a symlink, but auto_migrate is enabled
+                // Remove the existing folder/file since the skill exists in Talent
+                if metadata.is_dir() {
+                    fs::remove_dir_all(link_path).map_err(|e| Error::SymlinkRemove {
+                        path: link_path.to_path_buf(),
+                        message: format!("Failed to remove existing folder for migration: {e}"),
+                    })?;
+                } else {
+                    fs::remove_file(link_path).map_err(|e| Error::SymlinkRemove {
+                        path: link_path.to_path_buf(),
+                        message: format!("Failed to remove existing file for migration: {e}"),
+                    })?;
+                }
+
+                // Create the symlink after removing
+                self.do_create_symlink(link_path, target_path)?;
+                return Ok(SymlinkAction::Migrated);
             } else {
-                // Not a symlink - this is an error (don't overwrite user files)
+                // Not a symlink and auto_migrate is disabled - this is an error
                 return Err(Error::NotASymlink(link_path.to_path_buf()));
             }
         }
 
         // Create the symlink
+        self.do_create_symlink(link_path, target_path)?;
+        Ok(SymlinkAction::Created)
+    }
+
+    /// Actually create the symlink (platform-specific)
+    fn do_create_symlink(&self, link_path: &Path, target_path: &Path) -> Result<()> {
         #[cfg(unix)]
         std::os::unix::fs::symlink(target_path, link_path).map_err(|e| Error::SymlinkCreate {
             link_source: target_path.to_path_buf(),
@@ -210,7 +255,7 @@ impl Syncer {
             })?;
         }
 
-        Ok(SymlinkAction::Created)
+        Ok(())
     }
 
     /// Remove symlinks for skills that no longer exist
@@ -310,6 +355,8 @@ enum SymlinkAction {
     Created,
     /// Symlink already existed and pointed to correct target
     Unchanged,
+    /// Existing non-symlink was removed and replaced with symlink (auto-migration)
+    Migrated,
 }
 
 #[cfg(test)]
@@ -394,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn sync_errors_on_non_symlink() {
+    fn sync_errors_on_non_symlink_when_auto_migrate_disabled() {
         let temp = TempDir::new().unwrap();
         let skills_dir = temp.path().join("skills");
         std::fs::create_dir_all(&skills_dir).unwrap();
@@ -407,12 +454,41 @@ mod tests {
         let conflict_path = target.skill_link_path("my-skill");
         std::fs::create_dir_all(&conflict_path).unwrap(); // Create a directory instead
 
-        let syncer = Syncer::new();
+        let mut syncer = Syncer::new();
+        syncer.auto_migrate = false; // Disable auto-migration
         let result = syncer.sync_target(&target, &[skill]);
 
         assert!(!result.is_success());
         assert_eq!(result.errors.len(), 1);
         assert!(result.errors[0].message.contains("not a symlink"));
+    }
+
+    #[test]
+    fn sync_auto_migrates_non_symlink() {
+        let temp = TempDir::new().unwrap();
+        let skills_dir = temp.path().join("skills");
+        std::fs::create_dir_all(&skills_dir).unwrap();
+
+        let skill = create_test_skill(&skills_dir, "my-skill");
+        let target = create_test_target(temp.path());
+
+        // Create target directory and a regular folder where symlink should go
+        std::fs::create_dir_all(&target.skills_path).unwrap();
+        let conflict_path = target.skill_link_path("my-skill");
+        std::fs::create_dir_all(&conflict_path).unwrap();
+
+        // Create a file inside to simulate existing skill
+        std::fs::write(conflict_path.join("test.txt"), "test content").unwrap();
+
+        let syncer = Syncer::new(); // auto_migrate is true by default
+        let result = syncer.sync_target(&target, &[skill]);
+
+        assert!(result.is_success());
+        assert_eq!(result.created.len(), 1);
+
+        // The path should now be a symlink
+        let link_path = target.skill_link_path("my-skill");
+        assert!(link_path.symlink_metadata().unwrap().file_type().is_symlink());
     }
 
     #[test]

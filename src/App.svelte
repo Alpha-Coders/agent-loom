@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { ask } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget } from './lib/api';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
 
@@ -39,6 +39,29 @@
   let editorContent = $state('');
   let originalContent = $state('');
   let isSaving = $state(false);
+  let isFixing = $state(false);
+
+  // Snackbar/toast state
+  interface Snackbar {
+    id: number;
+    message: string;
+    type: 'success' | 'info' | 'warning';
+  }
+  let snackbars = $state<Snackbar[]>([]);
+  let snackbarId = 0;
+
+  function showSnackbar(message: string, type: 'success' | 'info' | 'warning' = 'success', duration = 3000) {
+    const id = ++snackbarId;
+    snackbars = [...snackbars, { id, message, type }];
+
+    setTimeout(() => {
+      snackbars = snackbars.filter(s => s.id !== id);
+    }, duration);
+  }
+
+  function dismissSnackbar(id: number) {
+    snackbars = snackbars.filter(s => s.id !== id);
+  }
 
   let hasUnsavedChanges = $derived(editorContent !== originalContent);
 
@@ -87,8 +110,22 @@
       error = null;
 
       skills = await validateAll();
-      lastSyncResults = await syncAll();
+      const results = await syncAll();
       await loadData();
+
+      // Calculate totals
+      const totalCreated = results.reduce((sum, r) => sum + r.created.length, 0);
+      const totalRemoved = results.reduce((sum, r) => sum + r.removed.length, 0);
+      const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);
+
+      if (totalErrors > 0) {
+        // Show persistent banner for errors
+        lastSyncResults = results;
+      } else {
+        // Show auto-dismissing snackbar for success
+        lastSyncResults = [];
+        showSnackbar(`Synced: +${totalCreated} -${totalRemoved}`, 'success');
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -121,6 +158,7 @@
       newSkillDescription = '';
       showNewSkillForm = false;
       stats = await getStats();
+      showSnackbar(`Created "${name}"`, 'success');
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -128,6 +166,16 @@
 
   async function handleDeleteSkill(skill: SkillInfo, event: MouseEvent) {
     event.stopPropagation();
+
+    // Confirmation dialog
+    const confirmed = await ask(`Delete "${skill.name}"?\n\nThis will permanently remove the skill and its symlinks from all targets.`, {
+      title: 'Delete Skill',
+      kind: 'warning',
+      okLabel: 'Delete',
+      cancelLabel: 'Cancel',
+    });
+
+    if (!confirmed) return;
 
     const folderName = skill.folder_name;
     const wasEditing = editingSkill?.folder_name === folderName;
@@ -145,6 +193,7 @@
       error = null;
       await deleteSkill(folderName);
       stats = await getStats();
+      showSnackbar(`Deleted "${skill.name}"`, 'success');
     } catch (e) {
       skills = previousSkills;
       error = e instanceof Error ? e.message : String(e);
@@ -192,6 +241,7 @@
       }
 
       stats = await getStats();
+      showSnackbar('Saved', 'success');
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
       await loadData();
@@ -217,6 +267,40 @@
     editorContent = content;
   }
 
+  async function handleFixSkill() {
+    if (!editingSkill) return;
+
+    try {
+      isFixing = true;
+      error = null;
+
+      const fixedSkill = await fixSkill(editingSkill.folder_name);
+
+      // Reload the content to show fixes
+      const newContent = await getSkillContent(fixedSkill.folder_name);
+      editorContent = newContent;
+      originalContent = newContent;
+
+      // Validate to update status
+      const validatedSkill = await validateSkill(fixedSkill.folder_name);
+      editingSkill = validatedSkill;
+
+      // Update skills list
+      skills = skills.map(s => s.folder_name === fixedSkill.folder_name ? validatedSkill : s);
+      stats = await getStats();
+      showSnackbar('Fixed frontmatter', 'success');
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      isFixing = false;
+    }
+  }
+
+  // Check if editing skill has fixable errors
+  let hasFixableErrors = $derived(
+    editingSkill?.validation_errors.some(e => e.includes('can be auto-fixed')) ?? false
+  );
+
   async function handleImport() {
     isImporting = true;
     error = null;
@@ -224,8 +308,17 @@
 
     try {
       const result = await importAllSkills();
-      lastImportResult = result;
       await loadData();
+
+      if (result.errors.length > 0) {
+        // Show persistent banner for errors
+        lastImportResult = result;
+      } else if (result.imported.length > 0) {
+        // Show auto-dismissing snackbar for success
+        showSnackbar(`Imported ${result.imported.length} skill${result.imported.length === 1 ? '' : 's'}`, 'success');
+      } else {
+        showSnackbar('No new skills to import', 'info');
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -276,27 +369,24 @@
   }
 
   // Event listener cleanup
-  let unlistenTraySync: UnlistenFn | null = null;
+  let unlistenFns: UnlistenFn[] = [];
 
-  // Prevent macOS beep on non-input keystrokes + keyboard shortcuts
+  // Prevent macOS beep on non-input keystrokes + additional keyboard shortcuts
   function handleKeydown(event: KeyboardEvent) {
     const target = event.composedPath()[0];
     const isInput = target instanceof HTMLInputElement ||
                     target instanceof HTMLTextAreaElement ||
                     (target instanceof HTMLElement && target.closest('.cm-editor'));
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts (Cmd+S for save - native menu handles Cmd+N, Cmd+R, etc.)
     if (event.metaKey || event.ctrlKey) {
       switch (event.key) {
         case 's':
-          event.preventDefault();
-          if (editingSkill && hasUnsavedChanges) {
+          // Cmd+S saves current skill (Cmd+Shift+S is sync all via menu)
+          if (!event.shiftKey && editingSkill && hasUnsavedChanges) {
+            event.preventDefault();
             handleSaveSkill();
           }
-          return;
-        case 'n':
-          event.preventDefault();
-          showNewSkillForm = true;
           return;
       }
     }
@@ -321,17 +411,29 @@
   onMount(async () => {
     loadData();
 
-    unlistenTraySync = await listen('tray-sync-all', () => {
+    // Listen for tray events
+    unlistenFns.push(await listen('tray-sync-all', () => {
       handleSync();
-    });
+    }));
+
+    // Listen for menu events
+    unlistenFns.push(await listen('menu-new-skill', () => {
+      showNewSkillForm = true;
+    }));
+
+    unlistenFns.push(await listen('menu-sync-all', () => {
+      handleSync();
+    }));
+
+    unlistenFns.push(await listen('menu-refresh', () => {
+      handleRefresh();
+    }));
 
     document.addEventListener('keydown', handleKeydown);
   });
 
   onDestroy(() => {
-    if (unlistenTraySync) {
-      unlistenTraySync();
-    }
+    unlistenFns.forEach(fn => fn());
     document.removeEventListener('keydown', handleKeydown);
   });
 </script>
@@ -377,7 +479,11 @@
       <div class="nav-section">
         <div class="nav-section-header">
           <span class="nav-section-title">Targets</span>
-          <button class="nav-section-action" onclick={handleShowAddTarget} title="Add target">+</button>
+          <button class="nav-section-action" onclick={handleShowAddTarget} title="Add target">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </button>
         </div>
         {#if showAddTargetForm}
           <div class="add-target-form">
@@ -426,9 +532,21 @@
         {isSyncing ? 'Syncing...' : 'Sync All'}
       </button>
       <div class="sidebar-actions-row">
-        <button class="sidebar-action-small" onclick={handleRefresh} disabled={isLoading}>↻</button>
-        <button class="sidebar-action-small" onclick={handleImport} disabled={isImporting}>↓</button>
-        <button class="sidebar-action-small" onclick={() => showNewSkillForm = !showNewSkillForm}>+</button>
+        <button class="sidebar-action-small" onclick={handleRefresh} disabled={isLoading} title="Refresh skills">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </button>
+        <button class="sidebar-action-small" onclick={handleImport} disabled={isImporting} title="Import from targets">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+        </button>
+        <button class="sidebar-action-small" onclick={() => showNewSkillForm = !showNewSkillForm} title="New skill">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </button>
       </div>
     </div>
   </aside>
@@ -445,27 +563,63 @@
     {#if error}
       <div class="error-banner">
         <span>{error}</span>
-        <button onclick={() => error = null}>×</button>
+        <button onclick={() => error = null}>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
     {/if}
 
     {#if showNewSkillForm}
       <div class="new-skill-form">
-        <input
-          type="text"
-          placeholder="skill-name"
-          bind:value={newSkillName}
-          autofocus
-        />
-        <input
-          type="text"
-          placeholder="Description"
-          bind:value={newSkillDescription}
-        />
+        <div class="form-header">
+          <div class="form-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />
+            </svg>
+            <span>New Skill</span>
+          </div>
+          <button class="form-close" onclick={() => showNewSkillForm = false} title="Cancel (Esc)">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="form-field">
+          <label for="skill-name">Name</label>
+          <input
+            id="skill-name"
+            type="text"
+            placeholder="my-awesome-skill"
+            bind:value={newSkillName}
+            autofocus
+          />
+          {#if newSkillName.trim()}
+            <div class="field-hint">
+              Will create: <code>~/.talent/skills/{newSkillName.trim().toLowerCase().replace(/\s+/g, '-')}/</code>
+            </div>
+          {/if}
+        </div>
+
+        <div class="form-field">
+          <label for="skill-description">Description</label>
+          <textarea
+            id="skill-description"
+            placeholder="What does this skill do?"
+            bind:value={newSkillDescription}
+            rows="2"
+          ></textarea>
+        </div>
+
         <div class="form-actions">
           <button onclick={() => showNewSkillForm = false}>Cancel</button>
           <button class="primary" onclick={handleCreateSkill} disabled={!newSkillName.trim() || !newSkillDescription.trim()}>
-            Create
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Create Skill
           </button>
         </div>
       </div>
@@ -474,14 +628,28 @@
     {#if lastSyncResults.length > 0}
       {@const totalCreated = lastSyncResults.reduce((sum, r) => sum + r.created.length, 0)}
       {@const totalRemoved = lastSyncResults.reduce((sum, r) => sum + r.removed.length, 0)}
-      {@const totalErrors = lastSyncResults.reduce((sum, r) => sum + r.errors.length, 0)}
+      {@const allErrors = lastSyncResults.flatMap(r => r.errors.map(e => ({ target: r.target_name, ...e })))}
+      {@const totalErrors = allErrors.length}
       <div class="sync-banner" class:has-errors={totalErrors > 0}>
-        <span>
-          {#if totalErrors > 0}⚠{:else}✓{/if}
-          Synced: +{totalCreated} -{totalRemoved}
-          {#if totalErrors > 0}({totalErrors} errors){/if}
-        </span>
-        <button onclick={() => lastSyncResults = []}>×</button>
+        <div class="sync-info">
+          <span>
+            {#if totalErrors > 0}⚠{:else}✓{/if}
+            Synced: +{totalCreated} -{totalRemoved}
+            {#if totalErrors > 0}({totalErrors} errors){/if}
+          </span>
+          {#if totalErrors > 0}
+            <div class="sync-errors">
+              {#each allErrors as err}
+                <div class="sync-error">{err.target}: {err.message}</div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+        <button onclick={() => lastSyncResults = []}>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
     {/if}
 
@@ -491,7 +659,11 @@
           {#if lastImportResult.errors.length > 0}⚠{:else}✓{/if}
           Imported: {lastImportResult.imported.length} skills
         </span>
-        <button onclick={() => lastImportResult = null}>×</button>
+        <button onclick={() => lastImportResult = null}>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
     {/if}
 
@@ -523,7 +695,11 @@
               <div class="skill-name">{skill.name}</div>
               <div class="skill-description">{skill.description}</div>
             </div>
-            <button class="skill-delete" onclick={(e) => handleDeleteSkill(skill, e)}>×</button>
+            <button class="skill-delete" onclick={(e) => handleDeleteSkill(skill, e)} title="Delete skill">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         {/each}
       {/if}
@@ -549,9 +725,16 @@
       </div>
       {#if editingSkill.validation_errors.length > 0}
         <div class="validation-banner">
-          {#each editingSkill.validation_errors as err}
-            <div class="validation-error">{err}</div>
-          {/each}
+          <div class="validation-errors">
+            {#each editingSkill.validation_errors as err}
+              <div class="validation-error">{err}</div>
+            {/each}
+          </div>
+          {#if hasFixableErrors}
+            <button class="fix-button" onclick={handleFixSkill} disabled={isFixing || hasUnsavedChanges}>
+              {isFixing ? 'Fixing...' : 'Auto-Fix'}
+            </button>
+          {/if}
         </div>
       {/if}
       <div class="editor-container">
@@ -568,6 +751,22 @@
     </div>
   {/if}
 </div>
+
+<!-- Snackbar container -->
+{#if snackbars.length > 0}
+  <div class="snackbar-container">
+    {#each snackbars as snackbar (snackbar.id)}
+      <div class="snackbar snackbar-{snackbar.type}">
+        <span>{snackbar.message}</span>
+        <button onclick={() => dismissSnackbar(snackbar.id)}>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    {/each}
+  </div>
+{/if}
 
 <style>
   /* ============================================
@@ -653,6 +852,25 @@
     user-select: text;
     -webkit-user-select: text;
     cursor: text;
+  }
+
+  /* ============================================
+     ICONS (SF Symbols style)
+     ============================================ */
+  .icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .icon-sm {
+    width: 12px;
+    height: 12px;
+  }
+
+  .icon-lg {
+    width: 20px;
+    height: 20px;
   }
 
   /* ============================================
@@ -1013,9 +1231,20 @@
     color: var(--color-warning);
   }
 
-  .sync-banner span {
+  .sync-info {
     flex: 1;
     min-width: 0;
+  }
+
+  .sync-errors {
+    margin-top: var(--space-2);
+    font-size: var(--font-xs);
+    opacity: 0.9;
+  }
+
+  .sync-error {
+    padding: 2px 0;
+    word-break: break-word;
   }
 
   .sync-banner button {
@@ -1033,48 +1262,160 @@
     justify-content: center;
   }
 
+  /* ============================================
+     NEW SKILL FORM
+     ============================================ */
   .new-skill-form {
+    margin: var(--space-3);
     padding: var(--space-4);
-    background: var(--color-surface);
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--color-surface) 100%, transparent),
+      color-mix(in srgb, var(--color-surface) 85%, var(--color-bg))
+    );
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.2),
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    animation: form-slide-in 0.2s ease-out;
+  }
+
+  @keyframes form-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--color-border);
   }
 
-  .new-skill-form input {
+  .form-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+
+  .form-title .icon {
+    color: var(--color-primary);
+  }
+
+  .form-close {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-dim);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .form-close:hover {
+    color: var(--color-text);
+    background: var(--color-surface-hover);
+  }
+
+  .form-field {
+    margin-bottom: var(--space-4);
+  }
+
+  .form-field label {
+    display: block;
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-2);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .new-skill-form input,
+  .new-skill-form textarea {
     width: 100%;
-    padding: 10px var(--space-3);
-    margin-bottom: var(--space-3);
+    padding: var(--space-3);
     background: var(--color-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     color: var(--color-text);
     font-size: var(--font-sm);
+    font-family: inherit;
     box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
-  .new-skill-form input:focus {
+  .new-skill-form textarea {
+    resize: vertical;
+    min-height: 60px;
+    line-height: 1.5;
+  }
+
+  .new-skill-form input:focus,
+  .new-skill-form textarea:focus {
     outline: none;
     border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-muted);
   }
 
-  .new-skill-form input::placeholder {
+  .new-skill-form input::placeholder,
+  .new-skill-form textarea::placeholder {
     color: var(--color-text-dim);
+  }
+
+  .field-hint {
+    margin-top: var(--space-2);
+    font-size: var(--font-xs);
+    color: var(--color-text-muted);
+  }
+
+  .field-hint code {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+    background: var(--color-bg);
+    border-radius: var(--radius-sm);
+    color: var(--color-primary);
   }
 
   .form-actions {
     display: flex;
     gap: var(--space-2);
     justify-content: flex-end;
-    margin-top: var(--space-2);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--color-border);
   }
 
   .form-actions button {
-    padding: 8px var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
     background: var(--color-surface-hover);
     border: none;
     border-radius: var(--radius-md);
     color: var(--color-text-secondary);
     font-size: var(--font-sm);
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
+    transition: all 0.15s ease;
   }
 
   .form-actions button:hover:not(:disabled) {
@@ -1091,8 +1432,13 @@
   }
 
   .form-actions button:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  .form-actions .icon-sm {
+    width: 14px;
+    height: 14px;
   }
 
   .skill-list {
@@ -1297,15 +1643,45 @@
   }
 
   .validation-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
     padding: var(--space-2) var(--space-4);
     background: rgba(255, 69, 58, 0.15);
     border-bottom: 1px solid var(--color-border);
+  }
+
+  .validation-errors {
+    flex: 1;
   }
 
   .validation-error {
     font-size: var(--font-xs);
     color: var(--color-error);
     padding: var(--space-1) 0;
+  }
+
+  .fix-button {
+    flex-shrink: 0;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
+    background: var(--color-warning);
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .fix-button:hover:not(:disabled) {
+    background: #ffa340;
+  }
+
+  .fix-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .editor-container {
@@ -1353,5 +1729,81 @@
     border-radius: var(--radius-sm);
     font-family: inherit;
     font-size: var(--font-xs);
+  }
+
+  /* ============================================
+     SNACKBAR / TOAST NOTIFICATIONS
+     ============================================ */
+  .snackbar-container {
+    position: fixed;
+    bottom: var(--space-6);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    z-index: 1000;
+    pointer-events: none;
+  }
+
+  .snackbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    font-size: var(--font-sm);
+    color: var(--color-text);
+    pointer-events: auto;
+    animation: snackbar-slide-in 0.2s ease-out;
+  }
+
+  @keyframes snackbar-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .snackbar span {
+    flex: 1;
+  }
+
+  .snackbar button {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .snackbar button:hover {
+    color: var(--color-text);
+    background: var(--color-surface-hover);
+  }
+
+  .snackbar-success {
+    border-left: 3px solid var(--color-success);
+  }
+
+  .snackbar-info {
+    border-left: 3px solid var(--color-primary);
+  }
+
+  .snackbar-warning {
+    border-left: 3px solid var(--color-warning);
   }
 </style>

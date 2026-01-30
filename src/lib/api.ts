@@ -92,3 +92,13 @@ export async function removeCustomTarget(targetId: string): Promise<void> {
 export async function getAvailableTargetTypes(): Promise<[string, string][]> {
   return invoke<[string, string][]>('get_available_target_types');
 }
+
+// Skill fixing
+
+export async function fixSkill(name: string): Promise<SkillInfo> {
+  return invoke<SkillInfo>('fix_skill', { name });
+}
+
+export async function fixAllSkills(): Promise<[string, string[]][]> {
+  return invoke<[string, string[]][]>('fix_all_skills');
+}

@@ -535,6 +535,41 @@ impl SkillManager {
         None
     }
 
+    /// Fix a skill's frontmatter issues automatically
+    ///
+    /// Returns the list of fixes applied
+    pub fn fix_skill(&mut self, name: &str) -> Result<Vec<String>> {
+        let skill_path = self.config.skills_dir.join(name);
+        let skill = self
+            .get_skill_mut(name)
+            .ok_or_else(|| Error::SkillNotFound(skill_path))?;
+
+        skill.fix_frontmatter()
+    }
+
+    /// Fix all skills with frontmatter issues
+    ///
+    /// Returns a map of skill name to fixes applied
+    pub fn fix_all_skills(&mut self) -> Vec<(String, Vec<String>)> {
+        let names_to_fix: Vec<String> = self
+            .skills
+            .iter()
+            .filter(|s| s.has_fixable_errors())
+            .map(|s| s.name().to_string())
+            .collect();
+
+        let mut results = Vec::new();
+        for name in names_to_fix {
+            match self.fix_skill(&name) {
+                Ok(fixes) if !fixes.is_empty() => {
+                    results.push((name, fixes));
+                }
+                _ => {}
+            }
+        }
+        results
+    }
+
     /// Get summary statistics
     pub fn stats(&self) -> ManagerStats {
         ManagerStats {
