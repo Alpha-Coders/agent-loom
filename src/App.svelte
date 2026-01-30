@@ -891,6 +891,8 @@
     display: flex;
     height: 100vh;
     overflow: hidden;
+    /* Min-width = sidebar (220) + list (300) + editor (720) */
+    min-width: 1240px;
   }
 
   /* ============================================
@@ -1701,7 +1703,8 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-width: 400px;
+    /* Min-width ensures ~80 char line length: 80ch × ~8px + 50px gutter + 30px padding */
+    min-width: 720px;
     background: var(--color-sidebar);
     animation: editor-slide-in 0.2s ease-out;
   }
