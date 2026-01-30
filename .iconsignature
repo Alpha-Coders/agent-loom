@@ -1,0 +1,43 @@
+{
+  "background" : {
+    "direction" : "diagonal",
+    "endColor" : "CC8800",
+    "highlight" : 0,
+    "noise" : 0,
+    "startColor" : "FFD700",
+    "style" : "radial",
+    "vignette" : 0
+  },
+  "generatedAt" : "2026-01-30T00:04:22Z",
+  "mode" : "tauri",
+  "options" : {
+    "autoAlign" : true,
+    "autoAlignBiasY" : 0.015,
+    "autoAlignStrength" : 0.85,
+    "contrastThreshold" : 3,
+    "designChecks" : true,
+    "fillFallback" : true,
+    "fillFallbackMaxSize" : 32,
+    "minStrokeWidth" : 1,
+    "opticalSizing" : true,
+    "preview" : false,
+    "previewCellSize" : 220,
+    "safeAreaInset" : 0.12,
+    "visionOSLayered" : false
+  },
+  "platform" : "macos",
+  "symbol" : "square.stack.3d.up",
+  "symbolConfig" : {
+    "colors" : [
+      "FFFFFF"
+    ],
+    "glassOpacity" : 0.5,
+    "offsetX" : 0,
+    "offsetY" : 0,
+    "rendering" : "monochrome",
+    "scale" : 0.6,
+    "style" : "solid",
+    "weight" : "semibold"
+  },
+  "version" : 1
+}
