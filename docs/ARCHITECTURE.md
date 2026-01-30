@@ -4,7 +4,7 @@ This document describes the technical architecture of Agent Skills Manager.
 
 ## Overview
 
-Agent Skills Manager (ASM) is built with a Rust backend (Tauri v2) and a Svelte 5 frontend. The core logic lives in a separate `asm-core` crate, making it reusable across the GUI app and CLI.
+Agent Skills Manager is built with a Rust backend (Tauri v2) and a Svelte 5 frontend. The core logic lives in a separate `asm-core` crate, making it reusable across the GUI app and CLI.
 
 ## System Diagram
 

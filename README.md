@@ -26,7 +26,7 @@
 
 ## What is Agent Skills Manager?
 
-Agent Skills Manager (ASM) is a desktop app that lets you manage AI agent skills from a single location. Instead of manually copying skills to each tool's directory, ASM maintains a central repository and syncs them via symlinks.
+Agent Skills Manager is a desktop app that lets you manage AI agent skills from a single location. Instead of manually copying skills to each tool's directory, it maintains a central repository and syncs them via symlinks.
 
 ```
 ~/.agentskills/skills/my-skill/    →    ~/.claude/skills/my-skill
