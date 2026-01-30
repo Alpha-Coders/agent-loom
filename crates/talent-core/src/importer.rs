@@ -1,7 +1,7 @@
 //! Skill importer for migrating skills from target CLIs
 //!
 //! Scans target CLI directories for importable skills and copies them
-//! to Talent's central storage.
+//! to the central skills storage.
 
 use crate::config::Config;
 use crate::error::{Error, Result};
@@ -66,7 +66,7 @@ pub struct ScannedSkill {
 /// User's selection for importing a skill from an external folder
 #[derive(Debug, Clone, Deserialize)]
 pub struct FolderImportSelection {
-    /// Skill name (kebab-case, used as folder name in ~/.talent/skills/)
+    /// Skill name (kebab-case, used as folder name in ~/.agentskills/skills/)
     pub name: String,
 
     /// Path to the source skill directory

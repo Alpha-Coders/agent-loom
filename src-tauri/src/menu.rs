@@ -26,17 +26,17 @@ pub fn set_save_enabled(app: &AppHandle, enabled: bool) {
 pub fn create_menu(app: &AppHandle) -> Result<Menu<Wry>, tauri::Error> {
     let menu = Menu::new(app)?;
 
-    // App menu (Talent)
-    let app_menu = Submenu::new(app, "Talent", true)?;
-    app_menu.append(&PredefinedMenuItem::about(app, Some("About Talent"), None)?)?;
+    // App menu (Agent Skills Manager)
+    let app_menu = Submenu::new(app, "Agent Skills Manager", true)?;
+    app_menu.append(&PredefinedMenuItem::about(app, Some("About Agent Skills Manager"), None)?)?;
     app_menu.append(&PredefinedMenuItem::separator(app)?)?;
     app_menu.append(&PredefinedMenuItem::services(app, None)?)?;
     app_menu.append(&PredefinedMenuItem::separator(app)?)?;
-    app_menu.append(&PredefinedMenuItem::hide(app, Some("Hide Talent"))?)?;
+    app_menu.append(&PredefinedMenuItem::hide(app, Some("Hide Agent Skills Manager"))?)?;
     app_menu.append(&PredefinedMenuItem::hide_others(app, None)?)?;
     app_menu.append(&PredefinedMenuItem::show_all(app, None)?)?;
     app_menu.append(&PredefinedMenuItem::separator(app)?)?;
-    app_menu.append(&PredefinedMenuItem::quit(app, Some("Quit Talent"))?)?;
+    app_menu.append(&PredefinedMenuItem::quit(app, Some("Quit Agent Skills Manager"))?)?;
     menu.append(&app_menu)?;
 
     // File menu

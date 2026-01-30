@@ -1,10 +1,10 @@
 [package]
-name = "talent-core"
+name = "asm-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Core library for Talent - Agent Skills Manager"
+description = "Core library for Agent Skills Manager"
 
 [dependencies]
 serde.workspace = true

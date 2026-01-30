@@ -1,4 +1,4 @@
-//! Configuration module for Talent
+//! Configuration module for Agent Skills Manager
 //!
 //! Manages application configuration including:
 //! - Skills storage directory location
@@ -21,7 +21,7 @@ const DEFAULT_SKILLS_DIR: &str = "skills";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// Directory where skills are stored (default: ~/.talent/skills/)
+    /// Directory where skills are stored (default: ~/.agentskills/skills/)
     pub skills_dir: PathBuf,
 
     /// Target CLI configurations (key = target name)
@@ -78,7 +78,7 @@ impl Default for Preferences {
 }
 
 impl Config {
-    /// Load configuration from the default location (~/.talent/config.toml)
+    /// Load configuration from the default location (~/.agentskills/config.toml)
     pub fn load() -> Result<Self> {
         let config_path = Self::default_config_path()?;
         Self::load_from(&config_path)
@@ -119,23 +119,23 @@ impl Config {
         })
     }
 
-    /// Get the default config file path (~/.talent/config.toml)
+    /// Get the default config file path (~/.agentskills/config.toml)
     pub fn default_config_path() -> Result<PathBuf> {
-        Self::talent_dir().map(|d| d.join(CONFIG_FILE_NAME))
+        Self::app_dir().map(|d| d.join(CONFIG_FILE_NAME))
     }
 
-    /// Get the talent configuration directory (~/.talent/)
-    pub fn talent_dir() -> Result<PathBuf> {
+    /// Get the application configuration directory (~/.agentskills/)
+    pub fn app_dir() -> Result<PathBuf> {
         dirs::home_dir()
-            .map(|h| h.join(".talent"))
+            .map(|h| h.join(".agentskills"))
             .ok_or(Error::ConfigDirNotFound)
     }
 
-    /// Get the default skills directory (~/.talent/skills/)
+    /// Get the default skills directory (~/.agentskills/skills/)
     pub fn default_skills_dir() -> PathBuf {
         dirs::home_dir()
-            .map(|h| h.join(".talent").join(DEFAULT_SKILLS_DIR))
-            .unwrap_or_else(|| PathBuf::from(".talent").join(DEFAULT_SKILLS_DIR))
+            .map(|h| h.join(".agentskills").join(DEFAULT_SKILLS_DIR))
+            .unwrap_or_else(|| PathBuf::from(".agentskills").join(DEFAULT_SKILLS_DIR))
     }
 
     /// Ensure the skills directory exists
@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn default_config_has_sensible_values() {
         let config = Config::default();
-        assert!(config.skills_dir.to_string_lossy().contains(".talent"));
+        assert!(config.skills_dir.to_string_lossy().contains(".agentskills"));
         assert!(config.preferences.validate_on_sync);
     }
 

@@ -1,260 +1,128 @@
-# Talent
+<p align="center">
+  <img src="src-tauri/icons/128x128.png" alt="Agent Skills Manager Logo" width="128" height="128">
+</p>
 
-A cross-platform GUI application for managing Agent Skills across multiple AI CLI tools.
+<h1 align="center">Agent Skills Manager</h1>
 
-## Overview
+<p align="center">
+  <strong>One place to manage all your AI agent skills</strong>
+</p>
 
-Talent provides a unified interface to manage AI agent skills (like Claude Code skills, Codex skills, etc.) from a single location. Instead of manually copying skills to each tool's directory, Talent maintains a central skill repository and syncs them via symlinks.
+<p align="center">
+  <a href="https://github.com/Alpha-Coders/agent-skills-manager/releases"><img src="https://img.shields.io/github/v/release/Alpha-Coders/agent-skills-manager?style=flat-square" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
+  <a href="https://github.com/Alpha-Coders/agent-skills-manager/actions"><img src="https://img.shields.io/github/actions/workflow/status/Alpha-Coders/agent-skills-manager/release.yml?style=flat-square" alt="Build"></a>
+</p>
 
-## Architecture
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#supported-tools">Supported Tools</a> •
+  <a href="#development">Development</a> •
+  <a href="docs/ARCHITECTURE.md">Architecture</a>
+</p>
+
+---
+
+## What is Agent Skills Manager?
+
+Agent Skills Manager (ASM) is a desktop app that lets you manage AI agent skills from a single location. Instead of manually copying skills to each tool's directory, ASM maintains a central repository and syncs them via symlinks.
 
 ```
-~/.talent/
-├── config.toml          # Application configuration
-└── skills/              # Central skill storage
-    ├── my-skill/
-    │   └── SKILL.md
-    └── another-skill/
-        └── SKILL.md
-
-~/.claude/skills/        # Symlinks to ~/.talent/skills/*
-~/.codex/skills/         # Symlinks to ~/.talent/skills/*
-~/.gemini/skills/        # Symlinks to ~/.talent/skills/*
+~/.agentskills/skills/my-skill/    →    ~/.claude/skills/my-skill
+                           →    ~/.cursor/skills-cursor/my-skill
+                           →    ~/.codex/skills/my-skill
+                           →    ... and more
 ```
 
 ## Features
 
-- **Unified Management**: Manage all your AI skills from one place
-- **Multi-Target Sync**: Automatically sync skills to Claude, Codex, Gemini, Cursor, Amp, Goose, and more
-- **Validation Engine**: Validate skills against agentskills.io specification
-- **Built-in Editor**: Edit skills with syntax highlighting and live preview
-- **Cross-Platform**: Works on macOS, Windows, and Linux
+- **Unified Management** — Create, edit, and organize all your skills in one place
+- **Multi-Target Sync** — One click to sync skills across all your AI tools
+- **Built-in Editor** — Markdown editor with syntax highlighting
+- **Validation** — Validates skills against the [agentskills.io](https://agentskills.io) specification
+- **Import** — Import existing skills from any target or folder
+- **Cross-Platform** — Works on macOS, Windows, and Linux
 
-## Tech Stack
+## Supported Tools
 
-| Component | Technology |
-|-----------|------------|
-| Backend | Rust |
-| Framework | Tauri v2 |
-| Frontend | Svelte 5 + TypeScript + Vite |
-| Editor | CodeMirror 6 |
-| CLI | clap |
-
-## Architecture Diagram
-
-```mermaid
-flowchart TB
-    subgraph Frontend["Frontend (WebView)"]
-        direction TB
-        Svelte["Svelte 5<br/>Reactive UI"]
-        TS["TypeScript"]
-        Vite["Vite<br/>Dev Server & Bundler"]
-        CM["CodeMirror 6<br/>Markdown Editor"]
-
-        Svelte --> TS
-        Vite -.->|"HMR"| Svelte
-        CM -->|"Editor Component"| Svelte
-    end
-
-    subgraph Tauri["Tauri v2 Runtime"]
-        direction TB
-        WebView["WebView<br/>(WKWebView/WebView2)"]
-        IPC["IPC Bridge<br/>invoke() / emit()"]
-        Menu["Native Menu<br/>& Shortcuts"]
-        Window["Window Manager"]
-    end
-
-    subgraph Backend["Rust Backend"]
-        direction TB
-        TauriApp["talent-app<br/>(src-tauri)"]
-        Commands["Tauri Commands<br/>get_skills, sync_all, etc."]
-
-        TauriApp --> Commands
-    end
-
-    subgraph Core["Core Library"]
-        direction TB
-        TalentCore["talent-core<br/>(crates/talent-core)"]
-
-        subgraph Modules["Modules"]
-            Manager["SkillManager"]
-            Validator["Validator<br/>agentskills.io spec"]
-            Syncer["Syncer<br/>Symlink Engine"]
-            Config["Config<br/>(TOML)"]
-        end
-
-        TalentCore --> Modules
-    end
-
-    subgraph CLI["CLI Application"]
-        TalentCLI["talent-cli<br/>(clap)"]
-    end
-
-    subgraph Storage["File System"]
-        direction TB
-        TalentDir["~/.talent/"]
-        SkillsDir["skills/<br/>Central Repository"]
-        ConfigFile["config.toml"]
-
-        TalentDir --> SkillsDir
-        TalentDir --> ConfigFile
-    end
-
-    subgraph Targets["AI CLI Tools"]
-        direction LR
-        Claude["Claude Code<br/>~/.claude/skills/"]
-        Codex["Codex<br/>~/.codex/skills/"]
-        Gemini["Gemini<br/>~/.gemini/skills/"]
-        Cursor["Cursor<br/>~/.cursor/skills-cursor/"]
-        Amp["Amp<br/>~/.amp/skills/"]
-        Goose["Goose<br/>~/.goose/skills/"]
-    end
-
-    %% Connections
-    Frontend -->|"Tauri API"| IPC
-    IPC <-->|"Commands & Events"| Commands
-    WebView --> Frontend
-    Menu -->|"Events"| IPC
-    Window --> WebView
-
-    Commands --> TalentCore
-    TalentCLI --> TalentCore
-
-    Manager --> Validator
-    Manager --> Syncer
-    Manager --> Config
-
-    Syncer -->|"Read Skills"| SkillsDir
-    Syncer -->|"Create Symlinks"| Targets
-    Config -->|"Read/Write"| ConfigFile
-
-    %% Styling
-    classDef frontend fill:#ff6b6b,stroke:#333,color:#fff
-    classDef tauri fill:#24c8db,stroke:#333,color:#fff
-    classDef rust fill:#dea584,stroke:#333,color:#000
-    classDef storage fill:#95d5b2,stroke:#333,color:#000
-    classDef targets fill:#a8dadc,stroke:#333,color:#000
-
-    class Svelte,TS,Vite,CM frontend
-    class WebView,IPC,Menu,Window tauri
-    class TauriApp,Commands,TalentCore,Manager,Validator,Syncer,Config,TalentCLI rust
-    class TalentDir,SkillsDir,ConfigFile storage
-    class Claude,Codex,Gemini,Cursor,Amp,Goose targets
-```
-
-### Data Flow
-
-1. **User Interaction** → Svelte UI captures events
-2. **Frontend → Backend** → `invoke()` calls Tauri commands
-3. **Commands → Core** → Business logic in `talent-core`
-4. **Core → File System** → Read/write skills, create symlinks
-5. **File System → Targets** → Symlinks point to central skill storage
-
-## Project Structure
-
-```
-talent/
-├── Cargo.toml                    # Workspace configuration
-├── crates/
-│   ├── talent-core/              # Core library
-│   │   └── src/
-│   │       ├── config.rs         # Configuration management
-│   │       ├── error.rs          # Error types
-│   │       ├── skill.rs          # Skill model
-│   │       ├── target.rs         # Target (CLI tool) model
-│   │       ├── validator.rs      # Skill validation
-│   │       ├── syncer.rs         # Symlink synchronization
-│   │       └── manager.rs        # Integration layer
-│   └── talent-cli/               # CLI application
-│       └── src/main.rs
-├── src-tauri/                    # Tauri backend
-│   └── src/
-│       ├── main.rs
-│       ├── lib.rs
-│       └── commands.rs           # Tauri commands
-├── src/                          # Svelte frontend
-│   ├── main.ts
-│   ├── App.svelte
-│   └── app.css
-└── package.json
-```
-
-## CLI Usage
-
-```bash
-# Sync skills to all targets
-talent sync
-
-# Sync to specific target
-talent sync --target claude
-
-# List all skills
-talent list
-
-# Create new skill
-talent new my-skill
-
-# Validate skills
-talent validate --all
-
-# Show targets
-talent targets
-
-# Show configuration
-talent config
-
-# Diagnose issues
-talent doctor
-```
-
-## Supported Targets
-
-| Target | Skills Path |
-|--------|-------------|
+| Tool | Path |
+|------|------|
 | Claude Code | `~/.claude/skills/` |
+| Cursor | `~/.cursor/skills-cursor/` |
 | OpenAI Codex | `~/.codex/skills/` |
 | Gemini CLI | `~/.gemini/skills/` |
-| Cursor | `~/.cursor/skills-cursor/` |
 | Amp | `~/.amp/skills/` |
 | Goose | `~/.goose/skills/` |
 | Roo Code | `~/.roo-code/skills/` |
 | OpenCode | `~/.opencode/skills/` |
 | Vibe | `~/.vibe/skills/` |
 | Firebender | `~/.firebender/skills/` |
-| Mux | `~/.mux/skills/` |
-| Autohand | `~/.autohand/skills/` |
+
+## Installation
+
+### Download
+
+Get the latest release for your platform:
+
+| Platform | Download |
+|----------|----------|
+| macOS (Apple Silicon) | [Download](https://github.com/Alpha-Coders/agent-skills-manager/releases/latest) |
+| macOS (Intel) | [Download](https://github.com/Alpha-Coders/agent-skills-manager/releases/latest) |
+| Windows | [Download](https://github.com/Alpha-Coders/agent-skills-manager/releases/latest) |
+| Linux | [Download](https://github.com/Alpha-Coders/agent-skills-manager/releases/latest) |
+
+### macOS
+
+1. Unzip and drag `Agent Skills Manager.app` to Applications
+2. On first run, right-click → Open (to bypass Gatekeeper)
+
+### Windows
+
+Run the installer and follow the prompts.
+
+### Linux
+
+```bash
+chmod +x AgentSkillsManager-*.AppImage
+./AgentSkillsManager-*.AppImage
+```
 
 ## Development
 
 ### Prerequisites
 
-- Rust (via rustup)
-- Node.js 18+
-- Tauri CLI v2
+- [Rust](https://rustup.rs/) (via rustup)
+- [Node.js](https://nodejs.org/) 18+
+- [Tauri CLI v2](https://v2.tauri.app/)
 
-### Setup
+### Quick Start
 
 ```bash
-# Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
 # Install Tauri CLI
 cargo install tauri-cli --version "^2"
 
-# Install frontend dependencies
+# Install dependencies
 npm install
 
 # Run development server
-npm run tauri dev
+npm run dev
 ```
 
-### Building
+### Build
 
 ```bash
-# Build for production
 npm run tauri build
 ```
 
+### Project Structure
+
+See [Architecture Documentation](docs/ARCHITECTURE.md) for detailed technical information.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
 ## License
 
-MIT
+[MIT](LICENSE) © Stefan Negouai

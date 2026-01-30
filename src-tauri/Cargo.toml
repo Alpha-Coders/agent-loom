@@ -1,18 +1,18 @@
 [package]
-name = "talent-app"
+name = "asm-app"
 version = "0.1.0"
 edition = "2021"
-description = "Unified Agent Skills Manager"
-authors = ["Talent Contributors"]
+description = "Agent Skills Manager - Desktop App"
+authors = ["Stefan Negouai"]
 license = "MIT"
-default-run = "talent-app"
+default-run = "asm-app"
 
 [lib]
-name = "talent_app_lib"
+name = "asm_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "talent-app"
+name = "asm-app"
 path = "src/main.rs"
 
 [build-dependencies]
@@ -24,7 +24,7 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-talent-core = { path = "../crates/talent-core" }
+asm-core = { path = "../crates/talent-core" }
 
 [features]
 default = ["custom-protocol"]
