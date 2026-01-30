@@ -8,7 +8,11 @@
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
+  import TabBar, { type Tab } from './lib/TabBar.svelte';
   import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Sun, Moon, Monitor } from 'lucide-svelte';
+
+  // Tab state
+  let activeTab = $state<Tab>('skills');
 
   // Theme state
   type ThemeMode = 'system' | 'light' | 'dark';
@@ -384,6 +388,20 @@
     originalContent = '';
   }
 
+  async function handleShowNewSkillForm() {
+    if (hasUnsavedChanges && editingSkill) {
+      const confirmed = await ask('You have unsaved changes. Discard?', {
+        title: 'Unsaved Changes',
+        kind: 'warning',
+      });
+      if (!confirmed) return;
+    }
+    editingSkill = null;
+    editorContent = '';
+    originalContent = '';
+    showNewSkillForm = true;
+  }
+
   function handleEditorChange(content: string) {
     editorContent = content;
   }
@@ -659,9 +677,7 @@
     const currentWindow = getCurrentWindow();
 
     // Listen for menu events
-    unlistenFns.push(await listen('menu-new-skill', () => {
-      showNewSkillForm = true;
-    }));
+    unlistenFns.push(await listen('menu-new-skill', handleShowNewSkillForm));
 
     unlistenFns.push(await listen('menu-sync-all', () => {
       handleSync();
@@ -716,67 +732,71 @@
   class="app-container"
   role="application"
 >
-  <!-- Pane 1: Targets -->
-  <aside class="targets-pane">
-    <div class="pane-header">
-      <span class="pane-title">Targets</span>
-      <div class="pane-actions">
-        <button class="pane-action" onclick={handleAddFolderTarget} title="Add folder as target">
-          <Plus class="icon" size={16} strokeWidth={1.5} />
+  <!-- Pane 1: Sidebar -->
+  <aside class="sidebar-pane">
+    <!-- Section 1: App branding + Tabs -->
+    <TabBar {activeTab} onTabChange={(tab) => activeTab = tab} />
+
+    <!-- Section 2: Targets -->
+    <div class="targets-section">
+      <div class="section-header">
+        <span class="section-title">Targets</span>
+        <button class="section-action" onclick={handleAddFolderTarget} title="Add folder as target">
+          <Plus class="icon" size={14} strokeWidth={1.5} />
+        </button>
+      </div>
+
+      <div class="targets-list-container">
+        <div class="targets-list">
+          {#each targets as target}
+            {@const syncStatus = target.sync_status}
+            {@const isOutOfSync = syncStatus && !syncStatus.is_synced}
+            {@const syncIssues = isOutOfSync ? [
+              ...syncStatus.missing_skills.length ? [`${syncStatus.missing_skills.length} missing`] : [],
+              ...syncStatus.extra_items.length ? [`${syncStatus.extra_items.length} unmanaged`] : [],
+              ...syncStatus.broken_links.length ? [`${syncStatus.broken_links.length} broken`] : []
+            ].join(', ') : ''}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="target-item"
+              class:disabled={!target.enabled}
+              onclick={() => handleToggleTarget(target.id)}
+              oncontextmenu={(e) => handleTargetContextMenu(target, e)}
+              title={target.enabled
+                ? isOutOfSync
+                  ? `Out of sync: ${syncIssues}\nClick to disable • Right-click for options`
+                  : 'Synced • Click to disable • Right-click for options'
+                : 'Click to enable • Right-click for options'}
+            >
+              <span class="target-icon">{target.enabled ? '◉' : '○'}</span>
+              <span class="target-name">{target.name}</span>
+              {#if target.enabled && target.exists}
+                {#if isOutOfSync}
+                  <span class="target-warning" title="Out of sync: {syncIssues}">●</span>
+                {:else}
+                  <span class="target-ready">✓</span>
+                {/if}
+              {/if}
+            </div>
+          {/each}
+          {#if targets.length === 0}
+            <div class="targets-empty">No targets detected</div>
+          {/if}
+        </div>
+      </div>
+
+      <div class="targets-toolbar">
+        <button class="sync-button" onclick={handleSync} disabled={isSyncing}>
+          <span class="sync-icon" class:spinning={isSyncing}>
+            <RefreshCw class="icon" size={14} strokeWidth={2} />
+          </span>
+          {isSyncing ? 'Syncing...' : 'Sync'}
         </button>
       </div>
     </div>
 
-    <div class="targets-toolbar">
-      <button class="sync-button" onclick={handleSync} disabled={isSyncing}>
-        <span class="sync-icon" class:spinning={isSyncing}>
-          <RefreshCw class="icon" size={14} strokeWidth={2} />
-        </span>
-        {isSyncing ? 'Syncing...' : 'Sync'}
-      </button>
-    </div>
-
-    <div class="targets-content">
-      <div class="targets-list">
-        {#each targets as target}
-          {@const syncStatus = target.sync_status}
-          {@const isOutOfSync = syncStatus && !syncStatus.is_synced}
-          {@const syncIssues = isOutOfSync ? [
-            ...syncStatus.missing_skills.length ? [`${syncStatus.missing_skills.length} missing`] : [],
-            ...syncStatus.extra_items.length ? [`${syncStatus.extra_items.length} unmanaged`] : [],
-            ...syncStatus.broken_links.length ? [`${syncStatus.broken_links.length} broken`] : []
-          ].join(', ') : ''}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            class="target-item"
-            class:disabled={!target.enabled}
-            onclick={() => handleToggleTarget(target.id)}
-            oncontextmenu={(e) => handleTargetContextMenu(target, e)}
-            title={target.enabled
-              ? isOutOfSync
-                ? `Out of sync: ${syncIssues}\nClick to disable • Right-click for options`
-                : 'Synced • Click to disable • Right-click for options'
-              : 'Click to enable • Right-click for options'}
-          >
-            <span class="target-icon">{target.enabled ? '◉' : '○'}</span>
-            <span class="target-name">{target.name}</span>
-            {#if target.enabled && target.exists}
-              {#if isOutOfSync}
-                <span class="target-warning" title="Out of sync: {syncIssues}">●</span>
-              {:else}
-                <span class="target-ready">✓</span>
-              {/if}
-            {/if}
-          </div>
-        {/each}
-        {#if targets.length === 0}
-          <div class="targets-empty">No targets detected</div>
-        {/if}
-      </div>
-    </div>
-
-    <div class="targets-footer">
+    <div class="sidebar-footer">
       <button class="theme-toggle" onclick={cycleTheme} title="Color scheme">
         {#if themeMode === 'system'}
           <Monitor class="icon" size={14} strokeWidth={1.5} />
@@ -801,12 +821,6 @@
           <span class="refresh-icon" class:spinning={isRefreshing}>
             <RotateCcw class="icon" size={16} strokeWidth={1.5} />
           </span>
-        </button>
-        <button class="pane-action" onclick={handleImport} disabled={isImporting} title="Import skills from AI tools">
-          <Download class="icon" size={16} strokeWidth={1.5} />
-        </button>
-        <button class="pane-action" onclick={handleFolderPickerImport} disabled={isScanning} title="Import from folder">
-          <FolderOpen class="icon" size={16} strokeWidth={1.5} />
         </button>
       </div>
     </div>
@@ -879,13 +893,24 @@
                 <div class="skill-name">{skill.name}</div>
                 <div class="skill-description">{skill.description}</div>
               </div>
-              <button class="skill-delete" onclick={(e) => handleDeleteSkill(skill, e)} title="Delete skill">
-                <Trash2 class="icon" size={16} strokeWidth={1.5} />
-              </button>
             </div>
           {/each}
         {/if}
       </div>
+    </div>
+
+    <div class="skills-toolbar">
+      <button class="toolbar-icon-button" onclick={handleImport} disabled={isImporting} title="Import skills from AI tools">
+        <Download class="icon" size={14} strokeWidth={1.5} />
+      </button>
+      <button class="toolbar-icon-button" onclick={handleFolderPickerImport} disabled={isScanning} title="Import from folder">
+        <FolderOpen class="icon" size={14} strokeWidth={1.5} />
+      </button>
+      <div class="toolbar-spacer"></div>
+      <button class="toolbar-button primary" onclick={handleShowNewSkillForm}>
+        <Plus class="icon" size={14} strokeWidth={2} />
+        <span>New</span>
+      </button>
     </div>
   </div>
 
@@ -926,6 +951,12 @@
       {/if}
       <div class="editor-container">
         <SkillEditor content={editorContent} onchange={handleEditorChange} />
+      </div>
+      <div class="editor-toolbar">
+        <button class="toolbar-button destructive" onclick={(e) => handleDeleteSkill(editingSkill!, e)} title="Delete skill">
+          <Trash2 class="icon" size={14} strokeWidth={1.5} />
+          <span>Delete</span>
+        </button>
       </div>
     {:else if showNewSkillForm}
       <div class="pane-header editor-header">
@@ -984,10 +1015,6 @@
           <FilePenLine class="placeholder-icon" size={48} strokeWidth={1} />
           <p class="placeholder-title">No Selection</p>
           <p class="placeholder-hint">Select a skill to edit, or create a new one</p>
-          <button class="placeholder-action" onclick={() => showNewSkillForm = true}>
-            <Plus class="icon" size={16} strokeWidth={2} />
-            New Skill
-          </button>
         </div>
       </div>
     {/if}
@@ -1291,9 +1318,9 @@
   }
 
   /* ============================================
-     PANE 1: TARGETS
+     PANE 1: SIDEBAR
      ============================================ */
-  .targets-pane {
+  .sidebar-pane {
     width: var(--targets-pane-width);
     background: var(--color-sidebar);
     border-right: 1px solid var(--color-border);
@@ -1305,11 +1332,59 @@
       border-color var(--theme-transition);
   }
 
-  .targets-content {
+  /* Targets Section */
+  .targets-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Allow flex children to shrink */
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    flex-shrink: 0;
+  }
+
+  .section-title {
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .section-action {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .section-action:hover {
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .section-action:active {
+    transform: scale(0.92);
+  }
+
+  .targets-list-container {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: var(--space-2) var(--space-3);
+    padding: 0 var(--space-2);
   }
 
   .targets-list {
@@ -1390,10 +1465,11 @@
     text-align: center;
   }
 
-  .targets-footer {
-    padding: var(--space-2) var(--space-3);
+  .sidebar-footer {
+    padding: var(--space-3) var(--space-3);
     border-top: 1px solid var(--color-border);
     flex-shrink: 0;
+    transition: border-color var(--theme-transition);
   }
 
   .theme-toggle {
@@ -1507,6 +1583,59 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    padding: var(--space-2) 0;
+  }
+
+  .skills-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+    transition: border-color var(--theme-transition);
+  }
+
+  .toolbar-icon-button {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .toolbar-icon-button:hover:not(:disabled) {
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .toolbar-icon-button:active:not(:disabled) {
+    transform: scale(0.92);
+  }
+
+  .toolbar-icon-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .toolbar-spacer {
+    flex: 1;
+  }
+
+  .toolbar-button.primary {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .toolbar-button.primary:hover {
+    background: var(--color-primary-hover);
   }
 
   /* ============================================
@@ -1695,7 +1824,7 @@
     padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--color-border);
     cursor: pointer;
-    min-height: 64px;
+    min-height: 56px;
     box-sizing: border-box;
     position: relative;
     transition:
@@ -1796,37 +1925,6 @@
     line-height: 1.4;
   }
 
-  .skill-delete {
-    flex-shrink: 0;
-    opacity: 0;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    background: none;
-    border: none;
-    color: var(--color-text-dim);
-    font-size: 16px;
-    cursor: pointer;
-    border-radius: var(--radius-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-  }
-
-  .skill-item:hover .skill-delete {
-    opacity: 1;
-  }
-
-  .skill-delete:hover {
-    color: var(--color-error);
-    background: rgba(255, 69, 58, 0.15);
-  }
-
-  .skill-delete:active {
-    transform: scale(0.9);
-  }
-
   /* ============================================
      PANE 3: EDITOR
      ============================================ */
@@ -1915,6 +2013,44 @@
     flex: 1;
     overflow: hidden;
     animation: editor-fade-in 0.2s ease-out;
+  }
+
+  .editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-sidebar);
+    flex-shrink: 0;
+    transition:
+      background-color var(--theme-transition),
+      border-color var(--theme-transition);
+  }
+
+  .toolbar-button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font-size: var(--font-xs);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .toolbar-button:hover {
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .toolbar-button.destructive:hover {
+    background: rgba(255, 69, 58, 0.15);
+    color: var(--color-error);
   }
 
   @keyframes editor-fade-in {
