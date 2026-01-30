@@ -202,6 +202,12 @@ pub fn run() {
         .on_menu_event(|app, event| {
             menu::handle_menu_event(app, &event);
         })
+        .on_window_event(|_window, event| {
+            // Quit the app when the main window is closed
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                std::process::exit(0);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::get_skills,
             commands::get_targets,
