@@ -355,7 +355,7 @@ impl SkillManager {
         Ok(())
     }
 
-    /// Rename a skill (renames the skill directory and updates symlinks)
+    /// Rename a skill (renames the skill directory, updates YAML frontmatter, and updates symlinks)
     pub fn rename_skill(&mut self, old_name: &str, new_name: &str) -> Result<&Skill> {
         // Validate new name
         if !crate::skill::is_valid_skill_name(new_name) {
@@ -386,11 +386,18 @@ impl SkillManager {
         // Rename the directory
         std::fs::rename(&old_path, &new_path).map_err(|e| Error::io(&old_path, e))?;
 
-        // Reload the skill from the new path
-        let skill = Skill::load(&new_path)?;
+        // Load the skill from the new path (may have old name in YAML)
+        let mut skill = Skill::load(&new_path)?;
 
-        // Update in our list
-        if let Some(existing) = self.skills.iter_mut().find(|s| s.name() == old_name) {
+        // Update the YAML frontmatter to have the new name if it differs
+        if skill.name() != new_name {
+            let content = skill.raw_content()?;
+            let updated_content = Self::update_name_in_content(&content, new_name);
+            skill.save_content(&updated_content)?;
+        }
+
+        // Update in our list - find by folder_name since YAML name may have been different
+        if let Some(existing) = self.skills.iter_mut().find(|s| s.folder_name() == old_name) {
             *existing = skill;
         }
 
@@ -405,9 +412,45 @@ impl SkillManager {
             }
         }
 
-        // Return reference to renamed skill
-        self.skills.iter().find(|s| s.name() == new_name)
+        // Return reference to renamed skill - find by folder_name which is now new_name
+        self.skills.iter().find(|s| s.folder_name() == new_name)
             .ok_or_else(|| Error::SkillNotFound(new_path))
+    }
+
+    /// Update the name field in YAML frontmatter content
+    fn update_name_in_content(content: &str, new_name: &str) -> String {
+        let trimmed = content.trim_start();
+        if !trimmed.starts_with("---") {
+            return content.to_string();
+        }
+
+        let after_first = &trimmed[3..];
+        let Some(end_idx) = after_first.find("\n---") else {
+            return content.to_string();
+        };
+
+        let yaml_section = &after_first[..end_idx];
+        let rest = &after_first[end_idx..];
+
+        // Replace the name field in the YAML section
+        let mut updated_yaml = String::new();
+        let mut found_name = false;
+        for line in yaml_section.lines() {
+            if line.trim_start().starts_with("name:") && !found_name {
+                updated_yaml.push_str(&format!("name: {}", new_name));
+                found_name = true;
+            } else {
+                updated_yaml.push_str(line);
+            }
+            updated_yaml.push('\n');
+        }
+
+        // Remove trailing newline since we'll add the rest
+        if updated_yaml.ends_with('\n') {
+            updated_yaml.pop();
+        }
+
+        format!("---{}{}", updated_yaml, rest)
     }
 
     /// Poll for file watcher events
@@ -727,5 +770,75 @@ mod tests {
         let results = manager.validate_all();
         assert_eq!(results.len(), 2);
         assert!(results.iter().all(|r| r.is_ok()));
+    }
+
+    #[test]
+    fn rename_skill_updates_folder_and_yaml() {
+        let temp = TempDir::new().unwrap();
+        let config = create_test_config(&temp);
+        let mut manager = SkillManager::with_config(config.clone()).unwrap();
+
+        manager.create_skill("old-name", "A skill to rename").unwrap();
+        assert_eq!(manager.skills().len(), 1);
+
+        // Rename the skill
+        let renamed = manager.rename_skill("old-name", "new-name").unwrap();
+        assert_eq!(renamed.name(), "new-name");
+        assert_eq!(renamed.folder_name(), "new-name");
+
+        // Old folder should not exist, new folder should
+        assert!(!config.skills_dir.join("old-name").exists());
+        assert!(config.skills_dir.join("new-name").exists());
+
+        // Should be findable by new name
+        assert!(manager.get_skill("new-name").is_some());
+        assert!(manager.get_skill("old-name").is_none());
+    }
+
+    #[test]
+    fn save_skill_content_with_name_change_renames_folder() {
+        let temp = TempDir::new().unwrap();
+        let config = create_test_config(&temp);
+        let mut manager = SkillManager::with_config(config.clone()).unwrap();
+
+        manager.create_skill("original-skill", "Original description").unwrap();
+
+        // Edit content to change the name
+        let new_content = r#"---
+name: renamed-skill
+description: Updated description
+---
+
+# Renamed Skill
+
+New content here.
+"#;
+
+        let result_name = manager.save_skill_content("original-skill", new_content).unwrap();
+        assert_eq!(result_name, "renamed-skill");
+
+        // Folder should be renamed
+        assert!(!config.skills_dir.join("original-skill").exists());
+        assert!(config.skills_dir.join("renamed-skill").exists());
+
+        // Skill should be accessible by new name
+        let skill = manager.get_skill("renamed-skill").unwrap();
+        assert_eq!(skill.name(), "renamed-skill");
+        assert_eq!(skill.description(), "Updated description");
+    }
+
+    #[test]
+    fn update_name_in_content_replaces_name_field() {
+        let content = r#"---
+name: old-name
+description: A test skill
+---
+
+# Content
+"#;
+        let updated = SkillManager::update_name_in_content(content, "new-name");
+        assert!(updated.contains("name: new-name"));
+        assert!(!updated.contains("name: old-name"));
+        assert!(updated.contains("description: A test skill"));
     }
 }
