@@ -113,7 +113,7 @@ impl Validator {
         // Combine loading errors with validation errors
         let all_errors: Vec<String> = loading_errors
             .into_iter()
-            .chain(errors.into_iter())
+            .chain(errors)
             .collect();
 
         // Update skill status

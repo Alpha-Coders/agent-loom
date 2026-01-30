@@ -282,7 +282,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst).map_err(|e| Error::create_dir(dst, e))?;
 
     for entry in fs::read_dir(src).map_err(|e| Error::read_dir(src, e))? {
-        let entry = entry.map_err(|e| Error::read_dir(src, e.into()))?;
+        let entry = entry.map_err(|e| Error::read_dir(src, e))?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
 
@@ -430,7 +430,7 @@ description: {description}
         let talent_skills = temp.path().join("talent_skills");
 
         fs::create_dir_all(&talent_skills).unwrap();
-        create_skill_in_dir(&source_dir.parent().unwrap(), "source", "Source skill");
+        create_skill_in_dir(source_dir.parent().unwrap(), "source", "Source skill");
 
         let importer = Importer::new(talent_skills.clone());
         let result = importer.import_skill(&source_dir, "imported-skill", false);
@@ -453,7 +453,7 @@ description: {description}
         let talent_skills = temp.path().join("talent_skills");
 
         fs::create_dir_all(&talent_skills).unwrap();
-        create_skill_in_dir(&source_dir.parent().unwrap(), "source", "Source skill");
+        create_skill_in_dir(source_dir.parent().unwrap(), "source", "Source skill");
         create_skill_in_dir(&talent_skills, "existing-skill", "Existing");
 
         let importer = Importer::new(talent_skills);
@@ -469,7 +469,7 @@ description: {description}
         let talent_skills = temp.path().join("talent_skills");
 
         fs::create_dir_all(&talent_skills).unwrap();
-        create_skill_in_dir(&source_dir.parent().unwrap(), "source", "New version");
+        create_skill_in_dir(source_dir.parent().unwrap(), "source", "New version");
         create_skill_in_dir(&talent_skills, "to-replace", "Old version");
 
         let importer = Importer::new(talent_skills.clone());
