@@ -161,18 +161,15 @@ jobs:
           ARCH: ${{ matrix.arch }}
           TARGET: ${{ matrix.target }}
         run: |
-          echo "Looking for macOS bundle..."
-          # Debug: show what was built
-          find src-tauri/target -name "*.app" -type d 2>/dev/null || echo "No .app bundles found"
-
-          APP_PATH="src-tauri/target/${TARGET}/release/bundle/macos/Talent.app"
+          # Tauri builds to workspace root target/, not src-tauri/target/
+          APP_PATH="target/${TARGET}/release/bundle/macos/Talent.app"
           if [ ! -d "$APP_PATH" ]; then
             echo "Expected path not found: $APP_PATH"
             echo "Searching for Talent.app..."
-            APP_PATH=$(find src-tauri/target -name "Talent.app" -type d | head -1)
+            APP_PATH=$(find target -name "Talent.app" -type d 2>/dev/null | head -1)
             if [ -z "$APP_PATH" ]; then
               echo "Error: Could not find Talent.app"
-              find src-tauri/target -type d -name "bundle" -exec ls -la {} \; 2>/dev/null || true
+              find target -type d -name "bundle" -exec ls -la {} \; 2>/dev/null || true
               exit 1
             fi
             echo "Found at: $APP_PATH"
@@ -189,15 +186,11 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           TARGET: ${{ matrix.target }}
         run: |
-          echo "Looking for Linux AppImage..."
-          # Debug: show what was built
-          find src-tauri/target -name "*.AppImage" 2>/dev/null || echo "No AppImage found"
-
-          APPIMAGE=$(find src-tauri/target -name "*.AppImage" | head -1)
+          # Tauri builds to workspace root target/, not src-tauri/target/
+          APPIMAGE=$(find target -name "*.AppImage" 2>/dev/null | head -1)
           if [ -z "$APPIMAGE" ]; then
             echo "Error: Could not find AppImage"
-            echo "Checking bundle directory..."
-            find src-tauri/target -type d -name "bundle" -exec ls -la {} \; 2>/dev/null || true
+            find target -type d -name "bundle" -exec ls -la {} \; 2>/dev/null || true
             exit 1
           fi
           echo "Found: $APPIMAGE"
@@ -213,18 +206,14 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          echo "Looking for Windows NSIS installer..."
-          # Debug: show what was built
-          find src-tauri/target -name "*.exe" -path "*/bundle/*" 2>/dev/null || echo "No exe in bundle found"
-
-          EXE=$(find src-tauri/target -name "*setup*.exe" -path "*/release/bundle/nsis/*" | head -1)
+          # Tauri builds to workspace root target/, not src-tauri/target/
+          EXE=$(find target -name "*setup*.exe" -path "*/release/bundle/nsis/*" 2>/dev/null | head -1)
           if [ -z "$EXE" ]; then
-            # Try alternate patterns
-            EXE=$(find src-tauri/target -name "*.exe" -path "*/bundle/nsis/*" | head -1)
+            EXE=$(find target -name "*.exe" -path "*/bundle/nsis/*" 2>/dev/null | head -1)
           fi
           if [ -z "$EXE" ]; then
             echo "Error: Could not find NSIS installer"
-            find src-tauri/target -type d -name "bundle" -exec ls -laR {} \; 2>/dev/null || true
+            find target -type d -name "bundle" -exec ls -laR {} \; 2>/dev/null || true
             exit 1
           fi
           echo "Found: $EXE"
