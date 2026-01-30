@@ -3,7 +3,7 @@
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill, setSaveMenuEnabled, scanFolderForSkills, importFromFolder } from './lib/api';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, renameSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, getAvailableTargetTypes, addCustomTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
@@ -17,6 +17,7 @@
 
   let isLoading = $state(true);
   let isSyncing = $state(false);
+  let isRefreshing = $state(false);
   let error = $state<string | null>(null);
 
   // New skill form
@@ -35,8 +36,6 @@
   let scannedSkills = $state<ScannedSkillInfo[]>([]);
   let isFolderImporting = $state(false);
 
-  // Sidebar filter
-  let activeFilter = $state<'all' | 'valid' | 'invalid'>('all');
 
   // Add target state
   let showAddTargetForm = $state(false);
@@ -78,27 +77,12 @@
   let hasNewSkillFormInput = $derived(newSkillName.trim() !== '' || newSkillDescription.trim() !== '');
   let hasAnyUnsavedWork = $derived(hasUnsavedChanges || (showNewSkillForm && hasNewSkillFormInput));
 
-  // Update Save menu enabled state when editing state changes
-  $effect(() => {
-    setSaveMenuEnabled(editingSkill !== null && hasUnsavedChanges);
-  });
-
-  // Filtered skills based on sidebar selection
-  let filteredSkills = $derived(() => {
-    switch (activeFilter) {
-      case 'valid':
-        return skills.filter(s => s.validation_status === 'valid');
-      case 'invalid':
-        return skills.filter(s => s.validation_status === 'invalid');
-      default:
-        return skills;
+  // Menu event handler - always enabled, checks state when called
+  function handleMenuSave() {
+    if (editingSkill && hasUnsavedChanges) {
+      handleSaveSkill();
     }
-  });
-
-  // Counts for sidebar
-  let validCount = $derived(skills.filter(s => s.validation_status === 'valid').length);
-  let invalidCount = $derived(skills.filter(s => s.validation_status === 'invalid').length);
-  let enabledTargetsCount = $derived(targets.filter(t => t.enabled).length);
+  }
 
   async function loadData() {
     try {
@@ -123,6 +107,9 @@
   }
 
   async function handleSync() {
+    const minDuration = 800; // Minimum time for one full icon rotation
+    const startTime = Date.now();
+
     try {
       isSyncing = true;
       error = null;
@@ -147,18 +134,33 @@
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
+      // Ensure minimum duration for smooth animation
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minDuration) {
+        await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
+      }
       isSyncing = false;
     }
   }
 
   async function handleRefresh() {
+    const minDuration = 800;
+    const startTime = Date.now();
+
     try {
+      isRefreshing = true;
       error = null;
       await refreshSkills();
       skills = await validateAll();
       stats = await getStats();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
+    } finally {
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minDuration) {
+        await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
+      }
+      isRefreshing = false;
     }
   }
 
@@ -177,6 +179,9 @@
       showNewSkillForm = false;
       stats = await getStats();
       showSnackbar(`Created "${name}"`, 'success');
+
+      // Load the new skill in the editor
+      await handleEditSkill(newSkill);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -499,6 +504,27 @@
     }
   }
 
+  // Finder integration
+  async function handleRevealSkill(skill: SkillInfo, event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      await revealInFinder(skill.path);
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function handleRevealTarget(target: TargetInfo, event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      await revealInFinder(target.skills_path);
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   async function handleShowAddTarget() {
     try {
       availableTargetTypes = await getAvailableTargetTypes();
@@ -564,11 +590,6 @@
   onMount(async () => {
     loadData();
 
-    // Listen for tray events
-    unlistenFns.push(await listen('tray-sync-all', () => {
-      handleSync();
-    }));
-
     // Listen for menu events
     unlistenFns.push(await listen('menu-new-skill', () => {
       showNewSkillForm = true;
@@ -582,11 +603,7 @@
       handleRefresh();
     }));
 
-    unlistenFns.push(await listen('menu-save', () => {
-      if (editingSkill && hasUnsavedChanges) {
-        handleSaveSkill();
-      }
-    }));
+    unlistenFns.push(await listen('menu-save', handleMenuSave));
 
     // Handle window close with unsaved changes confirmation
     const currentWindow = getCurrentWindow();
@@ -617,319 +634,211 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="app-container"
-  class:editor-open={editingSkill !== null}
   ondragenter={handleDragEnter}
   ondragleave={handleDragLeave}
   ondragover={handleDragOver}
   ondrop={handleDrop}
   role="application"
 >
-  <!-- Sidebar -->
-  <aside class="sidebar">
-    <div class="sidebar-header">
-      <h1>Skills</h1>
+  <!-- Pane 1: Targets -->
+  <aside class="targets-pane">
+    <div class="pane-header">
+      <span class="pane-title">Targets</span>
+      <button class="pane-action" onclick={handleShowAddTarget} title="Add target">
+        <Plus class="icon" size={16} strokeWidth={1.5} />
+      </button>
     </div>
 
-    <nav class="sidebar-nav">
-      <div class="nav-section">
-        <button
-          class="nav-item"
-          class:active={activeFilter === 'all'}
-          onclick={() => activeFilter = 'all'}
-        >
-          <span class="nav-icon">◈</span>
-          <span class="nav-label">All Skills</span>
-          <span class="nav-count">{skills.length}</span>
-        </button>
-        <button
-          class="nav-item"
-          class:active={activeFilter === 'valid'}
-          onclick={() => activeFilter = 'valid'}
-        >
-          <span class="nav-icon">●</span>
-          <span class="nav-label">Valid</span>
-          <span class="nav-count">{validCount}</span>
-        </button>
-        <button
-          class="nav-item"
-          class:active={activeFilter === 'invalid'}
-          onclick={() => activeFilter = 'invalid'}
-        >
-          <span class="nav-icon">○</span>
-          <span class="nav-label">Invalid</span>
-          <span class="nav-count">{invalidCount}</span>
-        </button>
-      </div>
+    <div class="targets-toolbar">
+      <button class="sync-button" onclick={handleSync} disabled={isSyncing}>
+        <span class="sync-icon" class:spinning={isSyncing}>
+          <RefreshCw class="icon" size={14} strokeWidth={2} />
+        </span>
+        {isSyncing ? 'Syncing...' : 'Sync'}
+      </button>
+    </div>
 
-      <div class="nav-section">
-        <div class="nav-section-header">
-          <span class="nav-section-title">Targets</span>
-          <button class="nav-section-action" onclick={handleShowAddTarget} title="Add target">
-            <Plus class="icon" size={16} strokeWidth={1.5} />
-          </button>
-        </div>
-        {#if showAddTargetForm}
-          <div class="add-target-form">
-            <select bind:value={selectedTargetType}>
-              {#each availableTargetTypes as [id, name]}
-                <option value={id}>{name}</option>
-              {/each}
-            </select>
-            <input
-              type="text"
-              placeholder="Skills path..."
-              bind:value={customTargetPath}
-              autocorrect="off"
-              autocapitalize="off"
-            />
-            <div class="add-target-actions">
-              <button class="add-target-btn" onclick={() => showAddTargetForm = false}>Cancel</button>
-              <button class="add-target-btn primary" onclick={handleAddTarget} disabled={!selectedTargetType || !customTargetPath.trim()}>
-                Add
-              </button>
-            </div>
+    <div class="targets-content">
+      {#if showAddTargetForm}
+        <div class="add-target-form">
+          <select bind:value={selectedTargetType}>
+            {#each availableTargetTypes as [id, name]}
+              <option value={id}>{name}</option>
+            {/each}
+          </select>
+          <input
+            type="text"
+            placeholder="Skills path..."
+            bind:value={customTargetPath}
+            autocorrect="off"
+            autocapitalize="off"
+          />
+          <div class="add-target-actions">
+            <button class="add-target-btn" onclick={() => showAddTargetForm = false}>Cancel</button>
+            <button class="add-target-btn primary" onclick={handleAddTarget} disabled={!selectedTargetType || !customTargetPath.trim()}>
+              Add
+            </button>
           </div>
-        {/if}
+        </div>
+      {/if}
+
+      <div class="targets-list">
         {#each targets as target}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
-            class="nav-item target-item"
+            class="target-item"
             class:disabled={!target.enabled}
             onclick={() => handleToggleTarget(target.id)}
-            title={target.enabled ? 'Click to disable' : 'Click to enable'}
+            oncontextmenu={(e) => handleRevealTarget(target, e)}
+            title={target.enabled ? 'Click to disable • Right-click to reveal' : 'Click to enable • Right-click to reveal'}
           >
-            <span class="nav-icon">{target.enabled ? '◉' : '○'}</span>
-            <span class="nav-label">{target.name}</span>
+            <span class="target-icon">{target.enabled ? '◉' : '○'}</span>
+            <span class="target-name">{target.name}</span>
             {#if target.enabled && target.exists}
               <span class="target-ready">✓</span>
             {/if}
           </div>
         {/each}
         {#if targets.length === 0}
-          <div class="nav-empty">No targets detected</div>
+          <div class="targets-empty">No targets detected</div>
         {/if}
-      </div>
-    </nav>
-
-    <div class="sidebar-footer">
-      <!-- Primary Action -->
-      <button class="sidebar-action-primary" onclick={handleSync} disabled={isSyncing}>
-        <RefreshCw class="icon" size={14} strokeWidth={2} />
-        {isSyncing ? 'Syncing...' : 'Sync All'}
-      </button>
-
-      <!-- Action Toolbar -->
-      <div class="sidebar-toolbar">
-        <button class="toolbar-button" onclick={handleRefresh} disabled={isLoading} title="Refresh skill list">
-          <RotateCcw class="icon" size={14} strokeWidth={1.5} />
-        </button>
-        <button class="toolbar-button" onclick={handleImport} disabled={isImporting} title="Import from targets">
-          <Download class="icon" size={14} strokeWidth={1.5} />
-        </button>
-        <button class="toolbar-button" onclick={handleFolderPickerImport} disabled={isScanning} title="Import from folder">
-          <FolderOpen class="icon" size={14} strokeWidth={1.5} />
-        </button>
       </div>
     </div>
   </aside>
 
-  <!-- Skill List -->
-  <div class="list-panel">
-    <div class="list-header">
-      <span class="list-title">
-        {activeFilter === 'all' ? 'All Skills' : activeFilter === 'valid' ? 'Valid Skills' : 'Invalid Skills'}
-      </span>
-      <button class="list-new-skill" onclick={() => showNewSkillForm = true}>
-        <Plus class="icon" size={14} strokeWidth={2} />
-        <span>New Skill</span>
-      </button>
-    </div>
-
-    {#if error}
-      <div class="error-banner">
-        <span>{error}</span>
-        <button onclick={() => error = null} aria-label="Dismiss error">
-          <X class="icon" size={16} strokeWidth={1.5} />
+  <!-- Pane 2: Skills -->
+  <div class="skills-pane">
+    <div class="pane-header">
+      <span class="pane-title">{skills.length} Skills</span>
+      <div class="pane-actions">
+        <button class="pane-action" onclick={handleRefresh} disabled={isRefreshing} title="Refresh">
+          <span class="refresh-icon" class:spinning={isRefreshing}>
+            <RotateCcw class="icon" size={16} strokeWidth={1.5} />
+          </span>
+        </button>
+        <button class="pane-action" onclick={handleImport} disabled={isImporting} title="Import from targets">
+          <Download class="icon" size={16} strokeWidth={1.5} />
+        </button>
+        <button class="pane-action" onclick={handleFolderPickerImport} disabled={isScanning} title="Import from folder">
+          <FolderOpen class="icon" size={16} strokeWidth={1.5} />
         </button>
       </div>
-    {/if}
+    </div>
 
-    {#if showNewSkillForm}
-      <div class="new-skill-form">
-        <div class="form-header">
-          <div class="form-title">
-            <Sparkles class="icon" size={16} strokeWidth={1.5} />
-            <span>New Skill</span>
-          </div>
-          <button class="form-close" onclick={handleCloseNewSkillForm} title="Cancel (Esc)">
+    <div class="skills-content">
+      {#if error}
+        <div class="banner banner-error">
+          <span>{error}</span>
+          <button onclick={() => error = null} aria-label="Dismiss error">
             <X class="icon" size={16} strokeWidth={1.5} />
           </button>
         </div>
+      {/if}
 
-        <div class="form-field">
-          <label for="skill-name">Name</label>
-          <!-- svelte-ignore a11y_autofocus -->
-          <input
-            id="skill-name"
-            type="text"
-            placeholder="my-awesome-skill"
-            bind:value={newSkillName}
-            autofocus
-            autocapitalize="off"
-            spellcheck="false"
-          />
-          {#if newSkillName.trim()}
-            <div class="field-hint">
-              Will create: <code>~/.talent/skills/{newSkillName.trim().toLowerCase().replace(/\s+/g, '-')}/</code>
-            </div>
-          {/if}
-        </div>
-
-        <div class="form-field">
-          <label for="skill-description">Description</label>
-          <textarea
-            id="skill-description"
-            placeholder="What does this skill do?"
-            bind:value={newSkillDescription}
-            rows="2"
-            autocapitalize="off"
-            spellcheck="false"
-          ></textarea>
-        </div>
-
-        <div class="form-actions">
-          <button class="form-btn" onclick={handleCloseNewSkillForm}>Cancel</button>
-          <button class="form-btn primary" onclick={handleCreateSkill} disabled={!newSkillName.trim() || !newSkillDescription.trim()}>
-            <Plus class="icon-sm" size={14} strokeWidth={2} />
-            Create Skill
+      {#if lastSyncResults.length > 0}
+        {@const totalCreated = lastSyncResults.reduce((sum, r) => sum + r.created.length, 0)}
+        {@const totalRemoved = lastSyncResults.reduce((sum, r) => sum + r.removed.length, 0)}
+        {@const allErrors = lastSyncResults.flatMap(r => r.errors.map(e => ({ target: r.target_name, ...e })))}
+        {@const totalErrors = allErrors.length}
+        <div class="banner" class:banner-warning={totalErrors > 0} class:banner-success={totalErrors === 0}>
+          <div class="banner-content">
+            <span>
+              {#if totalErrors > 0}⚠{:else}✓{/if}
+              Synced: +{totalCreated} -{totalRemoved}
+              {#if totalErrors > 0}({totalErrors} errors){/if}
+            </span>
+            {#if totalErrors > 0}
+              <div class="banner-details">
+                {#each allErrors as err}
+                  <div>{err.target}: {err.message}</div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+          <button onclick={() => lastSyncResults = []} aria-label="Dismiss sync results">
+            <X class="icon" size={16} strokeWidth={1.5} />
           </button>
         </div>
-      </div>
-    {/if}
-
-    {#if lastSyncResults.length > 0}
-      {@const totalCreated = lastSyncResults.reduce((sum, r) => sum + r.created.length, 0)}
-      {@const totalRemoved = lastSyncResults.reduce((sum, r) => sum + r.removed.length, 0)}
-      {@const allErrors = lastSyncResults.flatMap(r => r.errors.map(e => ({ target: r.target_name, ...e })))}
-      {@const totalErrors = allErrors.length}
-      <div class="sync-banner" class:has-errors={totalErrors > 0}>
-        <div class="sync-info">
-          <span>
-            {#if totalErrors > 0}⚠{:else}✓{/if}
-            Synced: +{totalCreated} -{totalRemoved}
-            {#if totalErrors > 0}({totalErrors} errors){/if}
-          </span>
-          {#if totalErrors > 0}
-            <div class="sync-errors">
-              {#each allErrors as err}
-                <div class="sync-error">{err.target}: {err.message}</div>
-              {/each}
-            </div>
-          {/if}
-        </div>
-        <button onclick={() => lastSyncResults = []} aria-label="Dismiss sync results">
-          <X class="icon" size={16} strokeWidth={1.5} />
-        </button>
-      </div>
-    {/if}
-
-    {#if lastImportResult}
-      <div class="sync-banner" class:has-errors={lastImportResult.errors.length > 0}>
-        <span>
-          {#if lastImportResult.errors.length > 0}⚠{:else}✓{/if}
-          Imported: {lastImportResult.imported.length} skills
-        </span>
-        <button onclick={() => lastImportResult = null} aria-label="Dismiss import results">
-          <X class="icon" size={16} strokeWidth={1.5} />
-        </button>
-      </div>
-    {/if}
-
-    <div class="skill-list">
-      {#if isLoading}
-        <div class="loading">Loading...</div>
-      {:else if filteredSkills().length === 0}
-        <div class="empty-state">
-          <div class="empty-icon">
-            {#if activeFilter === 'valid'}
-              <span class="empty-icon-symbol valid">●</span>
-            {:else if activeFilter === 'invalid'}
-              <span class="empty-icon-symbol invalid">○</span>
-            {:else}
-              <Sparkles class="empty-icon-sparkle" size={32} strokeWidth={1.5} />
-            {/if}
-          </div>
-          <p class="empty-title">
-            {#if activeFilter === 'valid'}
-              No valid skills
-            {:else if activeFilter === 'invalid'}
-              No invalid skills
-            {:else}
-              No skills yet
-            {/if}
-          </p>
-          <p class="empty-subtitle">
-            {#if activeFilter !== 'all'}
-              Try showing all skills or create a new one
-            {:else}
-              Create your first skill to get started
-            {/if}
-          </p>
-          {#if activeFilter !== 'all'}
-            <button class="empty-action secondary" onclick={() => activeFilter = 'all'}>Show All Skills</button>
-          {/if}
-        </div>
-      {:else}
-        {#each filteredSkills() as skill}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            class="skill-item"
-            class:selected={editingSkill?.folder_name === skill.folder_name}
-            onclick={() => handleEditSkill(skill)}
-          >
-            <div class="skill-status">
-              <span class="status-dot" class:valid={skill.validation_status === 'valid'} class:invalid={skill.validation_status === 'invalid'}></span>
-            </div>
-            <div class="skill-info">
-              <div class="skill-name">{skill.name}</div>
-              <div class="skill-description">{skill.description}</div>
-            </div>
-            <button class="skill-delete" onclick={(e) => handleDeleteSkill(skill, e)} title="Delete skill">
-              <Trash2 class="icon" size={14} strokeWidth={1.5} />
-            </button>
-          </div>
-        {/each}
       {/if}
+
+      {#if lastImportResult}
+        <div class="banner" class:banner-warning={lastImportResult.errors.length > 0} class:banner-success={lastImportResult.errors.length === 0}>
+          <span>
+            {#if lastImportResult.errors.length > 0}⚠{:else}✓{/if}
+            Imported: {lastImportResult.imported.length} skills
+          </span>
+          <button onclick={() => lastImportResult = null} aria-label="Dismiss import results">
+            <X class="icon" size={16} strokeWidth={1.5} />
+          </button>
+        </div>
+      {/if}
+
+      <div class="skills-list">
+        {#if isLoading}
+          <div class="loading">Loading...</div>
+        {:else if skills.length === 0}
+          <div class="empty-state">
+            <div class="empty-icon">
+              <Sparkles class="empty-icon-sparkle" size={32} strokeWidth={1.5} />
+            </div>
+            <p class="empty-title">No skills yet</p>
+            <p class="empty-subtitle">Create your first skill to get started</p>
+          </div>
+        {:else}
+          {#each skills as skill}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="skill-item"
+              class:selected={editingSkill?.folder_name === skill.folder_name}
+              onclick={() => handleEditSkill(skill)}
+              oncontextmenu={(e) => handleRevealSkill(skill, e)}
+              title="Click to edit • Right-click to reveal in Finder"
+            >
+              <div class="skill-status">
+                <span class="status-dot" class:valid={skill.validation_status === 'valid'} class:invalid={skill.validation_status === 'invalid'}></span>
+              </div>
+              <div class="skill-info">
+                <div class="skill-name">{skill.name}</div>
+                <div class="skill-description">{skill.description}</div>
+              </div>
+              <button class="skill-delete" onclick={(e) => handleDeleteSkill(skill, e)} title="Delete skill">
+                <Trash2 class="icon" size={14} strokeWidth={1.5} />
+              </button>
+            </div>
+          {/each}
+        {/if}
+      </div>
     </div>
   </div>
 
-  <!-- Editor Panel -->
-  {#if editingSkill}
-    <div class="editor-panel">
-      <div class="editor-header">
+  <!-- Pane 3: Editor -->
+  <div class="editor-pane">
+    {#if editingSkill}
+      <div class="pane-header editor-header">
+        <div class="pane-actions">
+          <button class="pane-action" onclick={handleCloseEditor} title="Close">
+            <X class="icon" size={16} strokeWidth={1.5} />
+          </button>
+        </div>
         <div class="editor-title">
           <h2>{editingSkill.name}</h2>
           {#if hasUnsavedChanges}
             <span class="unsaved-dot"></span>
           {/if}
         </div>
-        <div class="editor-actions">
-          <button class="editor-btn" onclick={handleCloseEditor}>
-            <X class="icon" size={14} strokeWidth={1.5} />
-            <span>Close</span>
-          </button>
-          <button class="editor-btn primary" onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges}>
-            {isSaving ? 'Saving...' : 'Save'}
+        <div class="pane-actions">
+          <button class="pane-action primary" onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges} title="Save">
+            {isSaving ? '...' : 'Save'}
           </button>
         </div>
       </div>
       {#if editingSkill.validation_errors.length > 0}
-        <div class="validation-banner">
-          <div class="validation-errors">
+        <div class="banner banner-error">
+          <div class="banner-content">
             {#each editingSkill.validation_errors as err}
-              <div class="validation-error">{err}</div>
+              <div>{err}</div>
             {/each}
           </div>
           {#if hasFixableErrors}
@@ -942,16 +851,70 @@
       <div class="editor-container">
         <SkillEditor content={editorContent} onchange={handleEditorChange} />
       </div>
-    </div>
-  {:else}
-    <div class="editor-placeholder">
-      <div class="placeholder-content">
-        <FilePenLine class="placeholder-icon" size={48} strokeWidth={1} />
-        <p class="placeholder-title">No Selection</p>
-        <p class="placeholder-hint">Select a skill to edit</p>
+    {:else if showNewSkillForm}
+      <div class="pane-header editor-header">
+        <div class="pane-actions">
+          <button class="pane-action" onclick={handleCloseNewSkillForm} title="Cancel">
+            <X class="icon" size={16} strokeWidth={1.5} />
+          </button>
+        </div>
+        <div class="editor-title">
+          <h2>New Skill</h2>
+        </div>
+        <div class="pane-actions">
+          <button class="pane-action primary" onclick={handleCreateSkill} disabled={!newSkillName.trim() || !newSkillDescription.trim()} title="Create">
+            Create
+          </button>
+        </div>
       </div>
-    </div>
-  {/if}
+      <div class="new-skill-container">
+        <div class="new-skill-form-centered">
+          <div class="form-field">
+            <label for="skill-name">Name</label>
+            <!-- svelte-ignore a11y_autofocus -->
+            <input
+              id="skill-name"
+              type="text"
+              placeholder="my-awesome-skill"
+              bind:value={newSkillName}
+              autofocus
+              autocapitalize="off"
+              spellcheck="false"
+            />
+            {#if newSkillName.trim()}
+              <div class="field-hint">
+                Will create: <code>~/.talent/skills/{newSkillName.trim().toLowerCase().replace(/\s+/g, '-')}/</code>
+              </div>
+            {/if}
+          </div>
+
+          <div class="form-field">
+            <label for="skill-description">Description</label>
+            <textarea
+              id="skill-description"
+              placeholder="What does this skill do?"
+              bind:value={newSkillDescription}
+              rows="3"
+              autocapitalize="off"
+              spellcheck="false"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+    {:else}
+      <div class="editor-placeholder-full">
+        <div class="placeholder-content">
+          <FilePenLine class="placeholder-icon" size={48} strokeWidth={1} />
+          <p class="placeholder-title">No Selection</p>
+          <p class="placeholder-hint">Select a skill to edit, or create a new one</p>
+          <button class="placeholder-action" onclick={() => showNewSkillForm = true}>
+            <Plus class="icon" size={16} strokeWidth={2} />
+            New Skill
+          </button>
+        </div>
+      </div>
+    {/if}
+  </div>
 </div>
 
 <!-- Drop Zone Overlay -->
@@ -1043,9 +1006,10 @@
     --color-warning: #ff9f0a;
     --color-error: #ff453a;
 
-    /* Layout */
-    --sidebar-width: 220px;
-    --list-width: 300px;
+    /* Layout - 3 Pane */
+    --targets-pane-width: 180px;
+    --skills-pane-width: 280px;
+    --editor-min-width: 720px;
   }
 
   /* ============================================
@@ -1095,108 +1059,232 @@
   }
 
   /* ============================================
-     LAYOUT
+     LAYOUT - 3 PANE
      ============================================ */
   .app-container {
     display: flex;
     height: 100vh;
     overflow: hidden;
-    /* Min-width = sidebar (220) + list (300) + editor (720) */
-    min-width: 1240px;
+    min-width: calc(var(--targets-pane-width) + var(--skills-pane-width) + var(--editor-min-width));
   }
 
   /* ============================================
-     SIDEBAR
+     SHARED PANE STYLES
      ============================================ */
-  .sidebar {
-    width: var(--sidebar-width);
+  .pane-header {
+    height: var(--titlebar-height);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    -webkit-app-region: drag;
+    flex-shrink: 0;
+    gap: var(--space-2);
+  }
+
+  .pane-title {
+    font-size: var(--font-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    white-space: nowrap;
+  }
+
+  .pane-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    -webkit-app-region: no-drag;
+  }
+
+  .pane-action {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  }
+
+  .pane-action:hover:not(:disabled) {
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .pane-action:active:not(:disabled) {
+    transform: scale(0.92);
+  }
+
+  .pane-action:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .pane-action.primary {
+    background: var(--color-primary);
+    color: white;
+    width: auto;
+    padding: 0 var(--space-3);
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .pane-action.primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  /* ============================================
+     PANE 1: TARGETS
+     ============================================ */
+  .targets-pane {
+    width: var(--targets-pane-width);
     background: var(--color-sidebar);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
     border-right: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
   }
 
-  .sidebar-header {
-    height: var(--titlebar-height);
-    padding: 0 var(--space-4);
-    display: flex;
-    align-items: flex-end;
-    padding-bottom: var(--space-3);
-    -webkit-app-region: drag;
-    flex-shrink: 0;
-  }
-
-  .sidebar-header h1 {
-    margin: 0;
-    font-size: var(--font-xl);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-    letter-spacing: -0.02em;
-  }
-
-  .sidebar-nav {
+  .targets-content {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--space-2) var(--space-3);
   }
 
-  .nav-section {
-    margin-bottom: var(--space-5);
+  .targets-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
   }
 
-  .nav-section-header {
+  .target-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: var(--space-1) var(--space-2);
-    margin-bottom: var(--space-1);
-  }
-
-  .nav-section-title {
-    font-size: 11px;
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  .nav-section-action {
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--color-text-dim);
-    font-size: 14px;
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
-  }
-
-  .nav-section-action:hover {
-    background: var(--color-surface);
-    color: var(--color-text-muted);
-    transform: scale(1.1);
-  }
-
-  .nav-section-action:active {
-    transform: scale(0.95);
-  }
-
-  .nav-empty {
+    gap: var(--space-2);
     padding: var(--space-2);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-xs);
+    color: var(--color-text-muted);
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+
+  .target-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .target-item:active {
+    transform: scale(0.98);
+  }
+
+  .target-item.disabled {
+    opacity: 0.5;
+  }
+
+  .target-icon {
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+    font-size: 10px;
+  }
+
+  .target-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .target-ready {
+    flex-shrink: 0;
+    color: var(--color-success);
+    font-size: 11px;
+    animation: checkmark-pop 0.3s ease;
+  }
+
+  @keyframes checkmark-pop {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .targets-empty {
+    padding: var(--space-4) var(--space-2);
     font-size: var(--font-xs);
     color: var(--color-text-dim);
     text-align: center;
   }
 
+  .targets-toolbar {
+    padding: var(--space-3);
+    flex-shrink: 0;
+  }
+
+  .sync-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+
+  .sync-button:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  .sync-button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .sync-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .sync-icon,
+  .refresh-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sync-icon.spinning {
+    animation: spin-cw 0.8s linear infinite;
+  }
+
+  .refresh-icon.spinning {
+    animation: spin-ccw 0.8s linear infinite;
+  }
+
+  @keyframes spin-cw {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes spin-ccw {
+    from { transform: rotate(360deg); }
+    to { transform: rotate(0deg); }
+  }
+
+  /* Add Target Form */
   .add-target-form {
     padding: var(--space-2);
     margin-bottom: var(--space-2);
@@ -1207,7 +1295,7 @@
   .add-target-form select,
   .add-target-form input {
     width: 100%;
-    padding: 8px var(--space-2);
+    padding: var(--space-2);
     margin-bottom: var(--space-2);
     background: var(--color-bg);
     border: 1px solid var(--color-border);
@@ -1234,8 +1322,8 @@
   }
 
   .add-target-btn {
-    height: 26px;
-    padding: 0 var(--space-3);
+    height: 24px;
+    padding: 0 var(--space-2);
     background: var(--color-surface-hover);
     border: none;
     border-radius: var(--radius-sm);
@@ -1268,189 +1356,11 @@
     cursor: not-allowed;
   }
 
-  .nav-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    width: 100%;
-    padding: var(--space-2) var(--space-2);
-    border: none;
-    background: transparent;
-    color: var(--color-text-secondary);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-size: var(--font-sm);
-    text-align: left;
-    min-height: 28px;
-    box-sizing: border-box;
-    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-  }
-
-  .nav-item:hover:not(.active) {
-    background: var(--color-surface);
-  }
-
-  .nav-item:active {
-    transform: scale(0.98);
-  }
-
-  .nav-item.active {
-    background: var(--color-primary-muted);
-    color: var(--color-primary);
-  }
-
-  .nav-item.disabled {
-    opacity: 0.5;
-  }
-
-  .nav-item.target-item {
-    cursor: pointer;
-    padding: var(--space-1) var(--space-2);
-    min-height: 24px;
-    font-size: var(--font-xs);
-    color: var(--color-text-muted);
-  }
-
-  .nav-item.target-item:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .nav-icon {
-    flex-shrink: 0;
-    width: 16px;
-    text-align: center;
-    font-size: 10px;
-  }
-
-  .nav-label {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .nav-count {
-    flex-shrink: 0;
-    font-size: 11px;
-    color: var(--color-text-muted);
-    background: var(--color-surface);
-    padding: 2px 8px;
-    border-radius: 10px;
-    min-width: 20px;
-    text-align: center;
-    transition: transform 0.2s ease, background 0.15s ease;
-  }
-
-  .nav-item:hover .nav-count {
-    background: var(--color-surface-hover);
-  }
-
-  .nav-item.active .nav-count {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .target-ready {
-    flex-shrink: 0;
-    color: var(--color-success);
-    font-size: 12px;
-    animation: checkmark-pop 0.3s ease;
-  }
-
-  @keyframes checkmark-pop {
-    0% { transform: scale(0); opacity: 0; }
-    50% { transform: scale(1.3); }
-    100% { transform: scale(1); opacity: 1; }
-  }
-
-  .sidebar-footer {
-    padding: var(--space-3);
-    border-top: 1px solid var(--color-border);
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  /* Primary Sync Button */
-  .sidebar-action-primary {
-    width: 100%;
-    padding: 10px var(--space-4);
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  }
-
-  .sidebar-action-primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
-  }
-
-  .sidebar-action-primary:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
-  .sidebar-action-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* Toolbar Container */
-  .sidebar-toolbar {
-    display: flex;
-    align-items: center;
-    padding: var(--space-1);
-    background: var(--color-surface);
-    border-radius: var(--radius-md);
-  }
-
-  .toolbar-button {
-    flex: 1;
-    height: 32px;
-    padding: 0 var(--space-2);
-    background: transparent;
-    color: var(--color-text-muted);
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: var(--font-xs);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-1);
-    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-  }
-
-  .toolbar-button:hover:not(:disabled) {
-    background: var(--color-surface-hover);
-    color: var(--color-text);
-  }
-
-  .toolbar-button:active:not(:disabled) {
-    transform: scale(0.95);
-  }
-
-  .toolbar-button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
   /* ============================================
-     LIST PANEL
+     PANE 2: SKILLS
      ============================================ */
-  .list-panel {
-    width: var(--list-width);
+  .skills-pane {
+    width: var(--skills-pane-width);
     background: var(--color-bg);
     border-right: 1px solid var(--color-border);
     display: flex;
@@ -1458,133 +1368,74 @@
     flex-shrink: 0;
   }
 
-  .list-header {
-    height: var(--titlebar-height);
+  .skills-content {
+    flex: 1;
     display: flex;
-    align-items: flex-end;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .skills-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* ============================================
+     BANNERS (Shared)
+     ============================================ */
+  .banner {
+    display: flex;
+    align-items: flex-start;
     justify-content: space-between;
-    padding: 0 var(--space-4);
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-border);
-    -webkit-app-region: drag;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    font-size: var(--font-xs);
     flex-shrink: 0;
   }
 
-  .list-title {
-    font-size: var(--font-base);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-  }
-
-  .list-count {
-    font-size: var(--font-xs);
-    color: var(--color-text-dim);
-    background: var(--color-surface);
-    padding: 2px 8px;
-    border-radius: 10px;
-  }
-
-  .list-new-skill {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: 6px var(--space-3);
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-xs);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    -webkit-app-region: no-drag;
-    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  }
-
-  .list-new-skill:hover {
-    background: var(--color-primary-hover);
-    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
-  }
-
-  .list-new-skill:active {
-    transform: scale(0.97);
-  }
-
-  .error-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
+  .banner-error {
     background: rgba(255, 69, 58, 0.12);
     color: var(--color-error);
-    font-size: var(--font-xs);
   }
 
-  .error-banner span {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .error-banner button {
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    color: var(--color-error);
-    cursor: pointer;
-    padding: 0;
-    font-size: 16px;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .sync-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    background: rgba(48, 209, 88, 0.12);
-    color: var(--color-success);
-    font-size: var(--font-xs);
-  }
-
-  .sync-banner.has-errors {
+  .banner-warning {
     background: rgba(255, 159, 10, 0.12);
     color: var(--color-warning);
   }
 
-  .sync-info {
+  .banner-success {
+    background: rgba(48, 209, 88, 0.12);
+    color: var(--color-success);
+  }
+
+  .banner-content {
     flex: 1;
     min-width: 0;
   }
 
-  .sync-errors {
+  .banner-details {
     margin-top: var(--space-2);
-    font-size: var(--font-xs);
     opacity: 0.9;
   }
 
-  .sync-error {
-    padding: 2px 0;
-    word-break: break-word;
-  }
-
-  .sync-banner button {
+  .banner button {
     flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    padding: 0;
     background: none;
     border: none;
     color: inherit;
     cursor: pointer;
-    padding: 0;
-    font-size: 16px;
-    width: 20px;
-    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: var(--radius-sm);
+  }
+
+  .banner button:hover {
+    background: rgba(255, 255, 255, 0.1);
   }
 
   /* ============================================
@@ -1773,12 +1624,9 @@
     height: 14px;
   }
 
-  .skill-list {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
+  /* ============================================
+     SKILL LIST ITEMS
+     ============================================ */
   .loading, .empty-state {
     padding: var(--space-8) var(--space-4);
     text-align: center;
@@ -1826,19 +1674,6 @@
     margin-bottom: var(--space-4);
   }
 
-  .empty-icon-symbol {
-    font-size: 32px;
-    opacity: 0.4;
-  }
-
-  .empty-icon-symbol.valid {
-    color: var(--color-success);
-  }
-
-  .empty-icon-symbol.invalid {
-    color: var(--color-error);
-  }
-
   .empty-icon :global(.empty-icon-sparkle) {
     color: var(--color-text-dim);
     opacity: 0.6;
@@ -1857,38 +1692,6 @@
     color: var(--color-text-dim);
   }
 
-  .empty-action {
-    margin-top: var(--space-5);
-    padding: 10px var(--space-5);
-    background: var(--color-primary);
-    border: none;
-    border-radius: var(--radius-md);
-    color: white;
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  }
-
-  .empty-action:hover {
-    background: var(--color-primary-hover);
-    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
-  }
-
-  .empty-action:active {
-    transform: scale(0.97);
-  }
-
-  .empty-action.secondary {
-    background: var(--color-surface);
-    color: var(--color-text-secondary);
-  }
-
-  .empty-action.secondary:hover {
-    background: var(--color-surface-hover);
-    box-shadow: none;
-  }
-
   .skill-item {
     display: flex;
     align-items: center;
@@ -1898,11 +1701,10 @@
     cursor: pointer;
     min-height: 56px;
     box-sizing: border-box;
-    transition: background 0.15s ease;
   }
 
   .skill-item:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.04);
   }
 
   .skill-item.selected {
@@ -1931,34 +1733,14 @@
     height: 8px;
     border-radius: 50%;
     background: var(--color-text-dim);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .skill-item:hover .status-dot {
-    transform: scale(1.2);
   }
 
   .status-dot.valid {
     background: var(--color-success);
-    box-shadow: 0 0 0 0 rgba(48, 209, 88, 0);
-  }
-
-  .skill-item:hover .status-dot.valid {
-    box-shadow: 0 0 6px 2px rgba(48, 209, 88, 0.4);
   }
 
   .status-dot.invalid {
     background: var(--color-error);
-    animation: pulse-error 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse-error {
-    0%, 100% {
-      box-shadow: 0 0 0 0 rgba(255, 69, 58, 0);
-    }
-    50% {
-      box-shadow: 0 0 6px 2px rgba(255, 69, 58, 0.4);
-    }
   }
 
   .skill-info {
@@ -1989,7 +1771,7 @@
 
   .skill-delete {
     flex-shrink: 0;
-    opacity: 0;
+    visibility: hidden;
     width: 24px;
     height: 24px;
     padding: 0;
@@ -2002,63 +1784,42 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.1s ease;
   }
 
   .skill-item:hover .skill-delete {
-    opacity: 1;
+    visibility: visible;
   }
 
   .skill-delete:hover {
     color: var(--color-error);
     background: rgba(255, 69, 58, 0.15);
-    transform: scale(1.1);
-  }
-
-  .skill-delete:active {
-    transform: scale(0.9);
   }
 
   /* ============================================
-     EDITOR PANEL
+     PANE 3: EDITOR
      ============================================ */
-  .editor-panel {
+  .editor-pane {
     flex: 1;
     display: flex;
     flex-direction: column;
-    /* Min-width ensures ~80 char line length: 80ch × ~8px + 50px gutter + 30px padding */
-    min-width: 720px;
-    background: var(--color-sidebar);
-    animation: editor-slide-in 0.2s ease-out;
-  }
-
-  @keyframes editor-slide-in {
-    from {
-      opacity: 0;
-      transform: translateX(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
+    min-width: var(--editor-min-width);
+    background: var(--color-bg);
   }
 
   .editor-header {
-    height: var(--titlebar-height);
-    display: flex;
-    align-items: flex-end;
     justify-content: space-between;
-    padding: 0 var(--space-4);
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-bg);
-    -webkit-app-region: drag;
-    flex-shrink: 0;
+    background: var(--color-sidebar);
+  }
+
+  .editor-header-empty {
+    background: var(--color-sidebar);
   }
 
   .editor-title {
+    flex: 1;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--space-2);
   }
 
@@ -2066,6 +1827,7 @@
     margin: 0;
     font-size: var(--font-sm);
     font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
   }
 
   .unsaved-dot {
@@ -2087,88 +1849,26 @@
     }
   }
 
-  .editor-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    -webkit-app-region: no-drag;
-  }
-
-  .editor-btn {
-    height: 28px;
-    padding: 0 var(--space-3);
-    background: var(--color-surface);
-    border: none;
-    border-radius: var(--radius-md);
-    color: var(--color-text-secondary);
-    font-size: var(--font-xs);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  }
-
-  .editor-btn.primary {
-    background: var(--color-primary);
-    color: white;
-    padding: 0 var(--space-4);
-  }
-
-  .editor-btn:hover:not(:disabled) {
-    background: var(--color-surface-hover);
-  }
-
-  .editor-btn.primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
-  }
-
-  .editor-btn:active:not(:disabled) {
-    transform: scale(0.96);
-  }
-
-  .editor-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .validation-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-2) var(--space-4);
-    background: rgba(255, 69, 58, 0.15);
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .validation-errors {
-    flex: 1;
-  }
-
-  .validation-error {
-    font-size: var(--font-xs);
-    color: var(--color-error);
-    padding: var(--space-1) 0;
-  }
-
   .fix-button {
     flex-shrink: 0;
-    padding: var(--space-1) var(--space-3);
+    height: 24px;
+    padding: 0 var(--space-3);
     font-size: var(--font-xs);
     font-weight: var(--font-weight-medium);
-    color: var(--color-text);
+    color: var(--color-bg);
     background: var(--color-warning);
     border: none;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, transform 0.1s ease;
   }
 
   .fix-button:hover:not(:disabled) {
     background: #ffa340;
+  }
+
+  .fix-button:active:not(:disabled) {
+    transform: scale(0.96);
   }
 
   .fix-button:disabled {
@@ -2181,18 +1881,30 @@
     overflow: hidden;
   }
 
-  /* ============================================
-     EDITOR PLACEHOLDER
-     ============================================ */
+  /* Editor Placeholder */
   .editor-placeholder {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--color-bg);
+  }
+
+  .editor-placeholder-full {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-app-region: drag;
+  }
+
+  .editor-placeholder-full .placeholder-content {
+    -webkit-app-region: no-drag;
   }
 
   .placeholder-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
   }
 
@@ -2215,6 +1927,111 @@
     color: var(--color-text-dim);
   }
 
+  .placeholder-action {
+    margin-top: var(--space-5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-5);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+
+  .placeholder-action :global(.icon) {
+    flex-shrink: 0;
+  }
+
+  .placeholder-action:hover {
+    background: var(--color-primary-hover);
+  }
+
+  .placeholder-action:active {
+    transform: scale(0.97);
+  }
+
+  /* New Skill Form in Editor Pane */
+  .new-skill-container {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: var(--space-8);
+    overflow-y: auto;
+  }
+
+  .new-skill-form-centered {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .new-skill-form-centered .form-field {
+    margin-bottom: var(--space-5);
+  }
+
+  .new-skill-form-centered label {
+    display: block;
+    font-size: var(--font-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-2);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .new-skill-form-centered input,
+  .new-skill-form-centered textarea {
+    width: 100%;
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+    font-size: var(--font-base);
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .new-skill-form-centered textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+  }
+
+  .new-skill-form-centered input:focus,
+  .new-skill-form-centered textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-muted);
+  }
+
+  .new-skill-form-centered input::placeholder,
+  .new-skill-form-centered textarea::placeholder {
+    color: var(--color-text-dim);
+  }
+
+  .new-skill-form-centered .field-hint {
+    margin-top: var(--space-2);
+    font-size: var(--font-xs);
+    color: var(--color-text-muted);
+  }
+
+  .new-skill-form-centered .field-hint code {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+    background: var(--color-bg);
+    border-radius: var(--radius-sm);
+    color: var(--color-primary);
+  }
+
   /* ============================================
      SNACKBAR / TOAST NOTIFICATIONS
      ============================================ */
@@ -2233,15 +2050,17 @@
   .snackbar {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
     background: var(--color-surface);
     border-radius: var(--radius-lg);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
-    font-size: var(--font-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    font-size: var(--font-base);
+    font-weight: var(--font-weight-medium);
     color: var(--color-text);
     pointer-events: auto;
     animation: snackbar-slide-in 0.2s ease-out;
+    min-width: 200px;
   }
 
   @keyframes snackbar-slide-in {

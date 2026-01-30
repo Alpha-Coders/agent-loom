@@ -234,6 +234,8 @@ pub fn run() {
             // Folder import
             commands::scan_folder_for_skills,
             commands::import_from_folder,
+            // Finder integration
+            commands::reveal_in_finder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
