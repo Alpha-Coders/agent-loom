@@ -954,11 +954,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.15s ease;
   }
 
   .nav-section-action:hover {
     background: var(--color-surface);
     color: var(--color-text-muted);
+    transform: scale(1.1);
+  }
+
+  .nav-section-action:active {
+    transform: scale(0.95);
   }
 
   .nav-empty {
@@ -1039,6 +1045,15 @@
     text-align: left;
     min-height: 28px;
     box-sizing: border-box;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  }
+
+  .nav-item:hover:not(.active) {
+    background: var(--color-surface);
+  }
+
+  .nav-item:active {
+    transform: scale(0.98);
   }
 
   .nav-item.active {
@@ -1056,6 +1071,10 @@
     min-height: 24px;
     font-size: var(--font-xs);
     color: var(--color-text-muted);
+  }
+
+  .nav-item.target-item:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .nav-icon {
@@ -1082,12 +1101,29 @@
     border-radius: 10px;
     min-width: 20px;
     text-align: center;
+    transition: transform 0.2s ease, background 0.15s ease;
+  }
+
+  .nav-item:hover .nav-count {
+    background: var(--color-surface-hover);
+  }
+
+  .nav-item.active .nav-count {
+    background: var(--color-primary);
+    color: white;
   }
 
   .target-ready {
     flex-shrink: 0;
     color: var(--color-success);
     font-size: 12px;
+    animation: checkmark-pop 0.3s ease;
+  }
+
+  @keyframes checkmark-pop {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); opacity: 1; }
   }
 
   .sidebar-footer {
@@ -1106,10 +1142,16 @@
     font-size: var(--font-sm);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   }
 
   .sidebar-action:hover:not(:disabled) {
     background: var(--color-primary-hover);
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+  }
+
+  .sidebar-action:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   .sidebar-action:disabled {
@@ -1135,10 +1177,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease;
   }
 
   .sidebar-action-small:hover:not(:disabled) {
     background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
+
+  .sidebar-action-small:active:not(:disabled) {
+    transform: scale(0.92);
   }
 
   .sidebar-action-small:disabled {
@@ -1452,6 +1500,33 @@
     text-align: center;
     color: var(--color-text-muted);
     font-size: var(--font-sm);
+    animation: fade-in 0.3s ease;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .loading::before {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .empty-state p {
@@ -1467,10 +1542,15 @@
     color: var(--color-text-secondary);
     font-size: var(--font-sm);
     cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
   }
 
   .empty-state button:hover {
     background: var(--color-surface-hover);
+  }
+
+  .empty-state button:active {
+    transform: scale(0.97);
   }
 
   .skill-item {
@@ -1482,10 +1562,22 @@
     cursor: pointer;
     min-height: 56px;
     box-sizing: border-box;
+    transition: background 0.15s ease;
   }
 
-  /* Native: no hover effect, only selected state */
+  .skill-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
   .skill-item.selected {
+    background: var(--color-primary-muted);
+  }
+
+  .skill-item:active {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .skill-item.selected:active {
     background: var(--color-primary-muted);
   }
 
@@ -1503,14 +1595,34 @@
     height: 8px;
     border-radius: 50%;
     background: var(--color-text-dim);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .skill-item:hover .status-dot {
+    transform: scale(1.2);
   }
 
   .status-dot.valid {
     background: var(--color-success);
+    box-shadow: 0 0 0 0 rgba(48, 209, 88, 0);
+  }
+
+  .skill-item:hover .status-dot.valid {
+    box-shadow: 0 0 6px 2px rgba(48, 209, 88, 0.4);
   }
 
   .status-dot.invalid {
     background: var(--color-error);
+    animation: pulse-error 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-error {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(255, 69, 58, 0);
+    }
+    50% {
+      box-shadow: 0 0 6px 2px rgba(255, 69, 58, 0.4);
+    }
   }
 
   .skill-info {
@@ -1554,6 +1666,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.1s ease;
   }
 
   .skill-item:hover .skill-delete {
@@ -1563,6 +1676,11 @@
   .skill-delete:hover {
     color: var(--color-error);
     background: rgba(255, 69, 58, 0.15);
+    transform: scale(1.1);
+  }
+
+  .skill-delete:active {
+    transform: scale(0.9);
   }
 
   /* ============================================
@@ -1574,6 +1692,18 @@
     flex-direction: column;
     min-width: 400px;
     background: var(--color-sidebar);
+    animation: editor-slide-in 0.2s ease-out;
+  }
+
+  @keyframes editor-slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
   .editor-header {
@@ -1606,6 +1736,18 @@
     height: 8px;
     border-radius: 50%;
     background: var(--color-warning);
+    animation: unsaved-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes unsaved-pulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(0.85);
+    }
   }
 
   .editor-actions {
@@ -1622,6 +1764,7 @@
     color: var(--color-text-secondary);
     font-size: var(--font-xs);
     cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   }
 
   .editor-actions button.primary {
@@ -1635,6 +1778,11 @@
 
   .editor-actions button.primary:hover:not(:disabled) {
     background: var(--color-primary-hover);
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+  }
+
+  .editor-actions button:active:not(:disabled) {
+    transform: scale(0.96);
   }
 
   .editor-actions button:disabled {
