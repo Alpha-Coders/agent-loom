@@ -23,10 +23,6 @@ chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2.5"
 dirs = "6.0"
 
-# File watching
-notify = "8.0"
-notify-debouncer-mini = "0.7"
-
 # CLI
 clap = { version = "4.5", features = ["derive"] }
 

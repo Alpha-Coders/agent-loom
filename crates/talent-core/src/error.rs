@@ -120,15 +120,6 @@ pub enum Error {
         source: std::io::Error,
     },
 
-    // === Watcher Errors ===
-    /// File watcher initialization failed
-    #[error("Failed to initialize file watcher: {0}")]
-    WatcherInit(String),
-
-    /// File watcher error during operation
-    #[error("File watcher error: {0}")]
-    WatcherError(String),
-
     // === Serialization Errors ===
     /// YAML parsing/serialization error
     #[error("YAML error: {0}")]

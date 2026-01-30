@@ -297,14 +297,6 @@ fn cmd_doctor() -> Result<(), Box<dyn std::error::Error>> {
             println!("  Skills directory: {}", config.skills_dir.display());
             println!("  Config file: {}", config_path);
             println!(
-                "  Auto-sync: {}",
-                if config.preferences.auto_sync {
-                    "enabled"
-                } else {
-                    "disabled"
-                }
-            );
-            println!(
                 "  Validate on sync: {}",
                 if config.preferences.validate_on_sync {
                     "enabled"
@@ -369,22 +361,6 @@ fn cmd_doctor() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(_) => {
             println!("  Could not detect targets");
-        }
-    }
-    println!();
-
-    // File watcher status
-    println!("File Watcher:");
-    match &manager_result {
-        Ok(manager) => {
-            if manager.is_watching() {
-                println!("  Status: running");
-            } else {
-                println!("  Status: not running (auto-sync disabled)");
-            }
-        }
-        Err(_) => {
-            println!("  Status: unknown");
         }
     }
 

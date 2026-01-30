@@ -15,8 +15,6 @@ thiserror.workspace = true
 chrono.workspace = true
 walkdir.workspace = true
 dirs.workspace = true
-notify.workspace = true
-notify-debouncer-mini.workspace = true
 
 [dev-dependencies]
 tempfile = "3.16"
