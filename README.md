@@ -46,18 +46,7 @@ Agent Skills Manager (ASM) is a desktop app that lets you manage AI agent skills
 
 ## Supported Tools
 
-| Tool | Path |
-|------|------|
-| Claude Code | `~/.claude/skills/` |
-| Cursor | `~/.cursor/skills-cursor/` |
-| OpenAI Codex | `~/.codex/skills/` |
-| Gemini CLI | `~/.gemini/skills/` |
-| Amp | `~/.amp/skills/` |
-| Goose | `~/.goose/skills/` |
-| Roo Code | `~/.roo-code/skills/` |
-| OpenCode | `~/.opencode/skills/` |
-| Vibe | `~/.vibe/skills/` |
-| Firebender | `~/.firebender/skills/` |
+Works with any AI coding tool that supports the [agentskills.io](https://agentskills.io) open format, including Claude Code, Cursor, Codex, Gemini CLI, and more.
 
 ## Installation
 
