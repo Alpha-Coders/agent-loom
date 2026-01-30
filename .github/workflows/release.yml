@@ -58,10 +58,10 @@ jobs:
 
       - name: Run clippy
         # Only validate library crates - Tauri app requires frontend to be built
-        run: cargo clippy -p asm-core -p asm-cli --all-targets -- -D warnings
+        run: cargo clippy -p agentloom-core -p agentloom-cli --all-targets -- -D warnings
 
       - name: Run tests
-        run: cargo test -p asm-core -p asm-cli
+        run: cargo test -p agentloom-core -p agentloom-cli
 
   build:
     needs: [validate]
@@ -162,17 +162,17 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           # Tauri builds to workspace root target/, not src-tauri/target/
-          APP_PATH=$(find target -name "Agent Skills Manager.app" -type d 2>/dev/null | head -1)
+          APP_PATH=$(find target -name "AgentLoom.app" -type d 2>/dev/null | head -1)
           if [ -z "$APP_PATH" ]; then
-            echo "Error: Could not find Agent Skills Manager.app"
+            echo "Error: Could not find AgentLoom.app"
             find target -type d -name "bundle" -exec ls -la {} \; 2>/dev/null || true
             exit 1
           fi
           echo "Found at: $APP_PATH"
 
-          ZIP_NAME="AgentSkillsManager-${VERSION}-macos-${ARCH}.zip"
+          ZIP_NAME="AgentLoom-${VERSION}-macos-${ARCH}.zip"
           cd "$(dirname "$APP_PATH")"
-          zip -r -q "${GITHUB_WORKSPACE}/${ZIP_NAME}" "Agent Skills Manager.app"
+          zip -r -q "${GITHUB_WORKSPACE}/${ZIP_NAME}" "AgentLoom.app"
           echo "artifact_name=${ZIP_NAME}" >> $GITHUB_ENV
 
       - name: Package Linux artifact
@@ -190,7 +190,7 @@ jobs:
           fi
           echo "Found: $APPIMAGE"
 
-          NEW_NAME="AgentSkillsManager-${VERSION}-linux-x64.AppImage"
+          NEW_NAME="AgentLoom-${VERSION}-linux-x64.AppImage"
           cp "$APPIMAGE" "$NEW_NAME"
           chmod +x "$NEW_NAME"
           echo "artifact_name=${NEW_NAME}" >> $GITHUB_ENV
@@ -213,14 +213,14 @@ jobs:
           fi
           echo "Found: $EXE"
 
-          NEW_NAME="AgentSkillsManager-${VERSION}-windows-x64-setup.exe"
+          NEW_NAME="AgentLoom-${VERSION}-windows-x64-setup.exe"
           cp "$EXE" "$NEW_NAME"
           echo "artifact_name=${NEW_NAME}" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgentSkillsManager-${{ matrix.platform }}-${{ matrix.arch }}
+          name: AgentLoom-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ env.artifact_name }}
           if-no-files-found: error
           retention-days: 7
@@ -285,27 +285,27 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_info.outputs.tag }}
-          name: Agent Skills Manager ${{ steps.release_info.outputs.version }}
+          name: AgentLoom ${{ steps.release_info.outputs.version }}
           draft: ${{ steps.release_info.outputs.draft }}
           prerelease: ${{ steps.release_info.outputs.prerelease }}
           generate_release_notes: true
           files: |
             artifacts/*
           body: |
-            ## Agent Skills Manager ${{ steps.release_info.outputs.version }}
+            ## AgentLoom ${{ steps.release_info.outputs.version }}
 
             ### Downloads
 
             | Platform | Architecture | Download |
             |----------|--------------|----------|
-            | macOS | Apple Silicon (M1/M2) | `AgentSkillsManager-${{ steps.release_info.outputs.version }}-macos-arm64.zip` |
-            | macOS | Intel | `AgentSkillsManager-${{ steps.release_info.outputs.version }}-macos-x64.zip` |
-            | Linux | x64 | `AgentSkillsManager-${{ steps.release_info.outputs.version }}-linux-x64.AppImage` |
-            | Windows | x64 | `AgentSkillsManager-${{ steps.release_info.outputs.version }}-windows-x64-setup.exe` |
+            | macOS | Apple Silicon (M1/M2) | `AgentLoom-${{ steps.release_info.outputs.version }}-macos-arm64.zip` |
+            | macOS | Intel | `AgentLoom-${{ steps.release_info.outputs.version }}-macos-x64.zip` |
+            | Linux | x64 | `AgentLoom-${{ steps.release_info.outputs.version }}-linux-x64.AppImage` |
+            | Windows | x64 | `AgentLoom-${{ steps.release_info.outputs.version }}-windows-x64-setup.exe` |
 
             ### Installation
 
-            **macOS:** Unzip and drag `Agent Skills Manager.app` to Applications. On first run, right-click and select "Open" to bypass Gatekeeper.
+            **macOS:** Unzip and drag `AgentLoom.app` to Applications. On first run, right-click and select "Open" to bypass Gatekeeper.
 
             **Linux:** Make the AppImage executable (`chmod +x *.AppImage`) and run it.
 

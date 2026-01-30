@@ -1,18 +1,18 @@
 [package]
-name = "agent-skills-manager"
+name = "agentloom-app"
 version = "1.0.0"
 edition = "2021"
-description = "Agent Skills Manager - Desktop App"
+description = "AgentLoom - Desktop App"
 authors = ["Stefan Negouai"]
 license = "MIT"
-default-run = "agent-skills-manager"
+default-run = "agentloom-app"
 
 [lib]
-name = "agent_skills_manager_lib"
+name = "agentloom_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "agent-skills-manager"
+name = "agentloom-app"
 path = "src/main.rs"
 
 [build-dependencies]
@@ -24,7 +24,7 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-asm-core = { path = "../crates/talent-core" }
+agentloom-core = { path = "../crates/talent-core" }
 
 [features]
 default = ["custom-protocol"]

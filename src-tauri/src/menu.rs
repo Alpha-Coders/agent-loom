@@ -26,29 +26,29 @@ pub fn set_save_enabled(app: &AppHandle, enabled: bool) {
 pub fn create_menu(app: &AppHandle) -> Result<Menu<Wry>, tauri::Error> {
     let menu = Menu::new(app)?;
 
-    // App menu (Agent Skills Manager)
-    let app_menu = Submenu::new(app, "Agent Skills Manager", true)?;
+    // App menu (AgentLoom)
+    let app_menu = Submenu::new(app, "AgentLoom", true)?;
     let about_metadata = AboutMetadataBuilder::new()
         .version(Some(env!("CARGO_PKG_VERSION")))
         .short_version(Some(env!("GIT_HASH")))
         .authors(Some(vec!["Alpha Coders".to_string()]))
         .copyright(Some("© 2025 Alpha Coders"))
-        .website(Some("https://github.com/Alpha-Coders/agent-skills-manager"))
+        .website(Some("https://github.com/Alpha-Coders/agent-loom"))
         .website_label(Some("GitHub"))
         .build();
     app_menu.append(&PredefinedMenuItem::about(
         app,
-        Some("About Agent Skills Manager"),
+        Some("About AgentLoom"),
         Some(about_metadata),
     )?)?;
     app_menu.append(&PredefinedMenuItem::separator(app)?)?;
     app_menu.append(&PredefinedMenuItem::services(app, None)?)?;
     app_menu.append(&PredefinedMenuItem::separator(app)?)?;
-    app_menu.append(&PredefinedMenuItem::hide(app, Some("Hide Agent Skills Manager"))?)?;
+    app_menu.append(&PredefinedMenuItem::hide(app, Some("Hide AgentLoom"))?)?;
     app_menu.append(&PredefinedMenuItem::hide_others(app, None)?)?;
     app_menu.append(&PredefinedMenuItem::show_all(app, None)?)?;
     app_menu.append(&PredefinedMenuItem::separator(app)?)?;
-    app_menu.append(&PredefinedMenuItem::quit(app, Some("Quit Agent Skills Manager"))?)?;
+    app_menu.append(&PredefinedMenuItem::quit(app, Some("Quit AgentLoom"))?)?;
     menu.append(&app_menu)?;
 
     // File menu

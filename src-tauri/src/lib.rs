@@ -1,6 +1,6 @@
-//! Agent Skills Manager - Tauri backend library
+//! AgentLoom - Tauri backend library
 //!
-//! This module provides the Tauri commands that expose asm-core functionality
+//! This module provides the Tauri commands that expose agentloom-core functionality
 //! to the Svelte frontend.
 
 mod commands;
@@ -9,7 +9,7 @@ mod menu;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use asm_core::{ConflictResolution, SkillManager, ValidationStatus};
+use agentloom_core::{ConflictResolution, SkillManager, ValidationStatus};
 
 /// Skill information for the frontend
 /// See https://agentskills.io/specification for field definitions
@@ -37,8 +37,8 @@ pub struct SkillInfo {
     pub validation_errors: Vec<String>,
 }
 
-impl From<&asm_core::Skill> for SkillInfo {
-    fn from(skill: &asm_core::Skill) -> Self {
+impl From<&agentloom_core::Skill> for SkillInfo {
+    fn from(skill: &agentloom_core::Skill) -> Self {
         Self {
             name: skill.meta.name.clone(),
             folder_name: skill.folder_name().to_string(),
@@ -82,8 +82,8 @@ pub struct DiscoveredSkillInfo {
     pub existing_description: Option<String>,
 }
 
-impl From<&asm_core::DiscoveredSkill> for DiscoveredSkillInfo {
-    fn from(skill: &asm_core::DiscoveredSkill) -> Self {
+impl From<&agentloom_core::DiscoveredSkill> for DiscoveredSkillInfo {
+    fn from(skill: &agentloom_core::DiscoveredSkill) -> Self {
         Self {
             name: skill.name.clone(),
             description: skill.description.clone(),
@@ -104,8 +104,8 @@ pub struct ImportSelectionInfo {
 }
 
 impl ImportSelectionInfo {
-    pub fn to_core(&self) -> asm_core::ImportSelection {
-        asm_core::ImportSelection {
+    pub fn to_core(&self) -> agentloom_core::ImportSelection {
+        agentloom_core::ImportSelection {
             name: self.name.clone(),
             source_path: PathBuf::from(&self.source_path),
             resolution: match self.resolution.as_str() {
@@ -129,8 +129,8 @@ pub struct ScannedSkillInfo {
     pub existing_description: Option<String>,
 }
 
-impl From<&asm_core::ScannedSkill> for ScannedSkillInfo {
-    fn from(skill: &asm_core::ScannedSkill) -> Self {
+impl From<&agentloom_core::ScannedSkill> for ScannedSkillInfo {
+    fn from(skill: &agentloom_core::ScannedSkill) -> Self {
         Self {
             name: skill.name.clone(),
             description: skill.description.clone(),
@@ -153,8 +153,8 @@ pub struct FolderImportSelectionInfo {
 }
 
 impl FolderImportSelectionInfo {
-    pub fn to_core(&self) -> asm_core::FolderImportSelection {
-        asm_core::FolderImportSelection {
+    pub fn to_core(&self) -> agentloom_core::FolderImportSelection {
+        agentloom_core::FolderImportSelection {
             name: self.name.clone(),
             source_path: PathBuf::from(&self.source_path),
             apply_fixes: self.apply_fixes,

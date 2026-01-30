@@ -4,7 +4,20 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Talent - Skills Manager</title>
+    <title>AgentLoom</title>
+    <style>
+      /* Prevent flash by matching app background before Svelte loads */
+      html, body {
+        margin: 0;
+        padding: 0;
+        background-color: #1c1c1e;
+      }
+      @media (prefers-color-scheme: light) {
+        html, body {
+          background-color: #f5f5f7;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
