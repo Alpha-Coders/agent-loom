@@ -769,4 +769,441 @@ description: {description}
 
         assert!(discovered.is_empty());
     }
+
+    // =========================================================================
+    // Folder Import Tests (scan_folder, import_from_external, etc.)
+    // =========================================================================
+
+    fn create_skill_with_content(dir: &Path, name: &str, content: &str) {
+        let skill_dir = dir.join(name);
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(skill_dir.join(SKILL_FILE_NAME), content).unwrap();
+    }
+
+    #[test]
+    fn scan_folder_empty_returns_empty_list() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        let importer = Importer::new(talent_skills);
+        let scanned = importer.scan_folder(&external_folder).unwrap();
+
+        assert!(scanned.is_empty());
+    }
+
+    #[test]
+    fn scan_folder_finds_single_skill() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        create_skill_in_dir(&external_folder, "my-skill", "A test skill");
+
+        let importer = Importer::new(talent_skills);
+        let scanned = importer.scan_folder(&external_folder).unwrap();
+
+        assert_eq!(scanned.len(), 1);
+        assert_eq!(scanned[0].name, "my-skill");
+        assert_eq!(scanned[0].description, "A test skill");
+        assert!(!scanned[0].needs_fixes);
+        assert!(scanned[0].conflict.is_none());
+    }
+
+    #[test]
+    fn scan_folder_finds_nested_skills() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        // Create skills at different nesting levels
+        let nested1 = external_folder.join("project-a");
+        let nested2 = external_folder.join("project-b").join("deeper");
+        fs::create_dir_all(&nested1).unwrap();
+        fs::create_dir_all(&nested2).unwrap();
+
+        create_skill_in_dir(&nested1, "skill-one", "First skill");
+        create_skill_in_dir(&nested2, "skill-two", "Second skill");
+
+        let importer = Importer::new(talent_skills);
+        let scanned = importer.scan_folder(&external_folder).unwrap();
+
+        assert_eq!(scanned.len(), 2);
+        let names: Vec<&str> = scanned.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"skill-one"));
+        assert!(names.contains(&"skill-two"));
+    }
+
+    #[test]
+    fn scan_folder_detects_conflict_with_existing() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        // Create skill in talent (existing)
+        create_skill_in_dir(&talent_skills, "existing-skill", "Original version");
+        // Create skill with same name in external folder
+        create_skill_in_dir(&external_folder, "existing-skill", "New version");
+
+        let importer = Importer::new(talent_skills);
+        let scanned = importer.scan_folder(&external_folder).unwrap();
+
+        assert_eq!(scanned.len(), 1);
+        assert!(scanned[0].conflict.is_some());
+        let conflict = scanned[0].conflict.as_ref().unwrap();
+        assert_eq!(conflict.existing_description, "Original version");
+    }
+
+    #[test]
+    fn scan_folder_detects_non_kebab_name_needs_fixes() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        // Create skill with non-kebab-case name
+        let content = r#"---
+name: My_Skill_Name
+description: A skill with non-kebab name
+---
+
+# My Skill
+"#;
+        create_skill_with_content(&external_folder, "My_Skill_Name", content);
+
+        let importer = Importer::new(talent_skills);
+        let scanned = importer.scan_folder(&external_folder).unwrap();
+
+        assert_eq!(scanned.len(), 1);
+        assert!(scanned[0].needs_fixes);
+        assert!(!scanned[0].fixes_preview.is_empty());
+        // The name should be normalized to kebab-case
+        assert_eq!(scanned[0].name, "my-skill-name");
+    }
+
+    #[test]
+    fn scan_folder_skips_talent_skills_directory() {
+        let temp = TempDir::new().unwrap();
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        // Create a skill directly in talent skills directory
+        create_skill_in_dir(&talent_skills, "internal-skill", "Internal");
+
+        let importer = Importer::new(talent_skills.clone());
+        // Scan talent's own directory - should skip its contents
+        let scanned = importer.scan_folder(&talent_skills).unwrap();
+
+        assert!(scanned.is_empty());
+    }
+
+    #[test]
+    fn scan_folder_nonexistent_path_returns_error() {
+        let temp = TempDir::new().unwrap();
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        let importer = Importer::new(talent_skills);
+        let result = importer.scan_folder(&temp.path().join("nonexistent"));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_folder_file_path_returns_error() {
+        let temp = TempDir::new().unwrap();
+        let talent_skills = temp.path().join("talent");
+        let file_path = temp.path().join("file.txt");
+
+        fs::create_dir_all(&talent_skills).unwrap();
+        fs::write(&file_path, "not a directory").unwrap();
+
+        let importer = Importer::new(talent_skills);
+        let result = importer.scan_folder(&file_path);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn import_from_external_copies_without_removing_source() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        create_skill_in_dir(&external_folder, "my-skill", "External skill");
+        let source_path = external_folder.join("my-skill");
+
+        let importer = Importer::new(talent_skills.clone());
+        let result = importer.import_from_external(&source_path, "my-skill", false, false);
+
+        assert!(result.is_ok());
+
+        // Skill should be copied to talent
+        assert!(talent_skills.join("my-skill").exists());
+        assert!(talent_skills.join("my-skill").join(SKILL_FILE_NAME).exists());
+
+        // Source should NOT be removed (unlike regular import)
+        assert!(source_path.exists());
+    }
+
+    #[test]
+    fn import_from_external_renames_to_target_name() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        create_skill_in_dir(&external_folder, "Original_Name", "A skill");
+        let source_path = external_folder.join("Original_Name");
+
+        let importer = Importer::new(talent_skills.clone());
+        let result = importer.import_from_external(&source_path, "new-name", false, false);
+
+        assert!(result.is_ok());
+
+        // Should be imported with the new name
+        assert!(talent_skills.join("new-name").exists());
+        assert!(!talent_skills.join("Original_Name").exists());
+    }
+
+    #[test]
+    fn import_from_external_fails_on_conflict_without_overwrite() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        create_skill_in_dir(&external_folder, "conflicting", "New version");
+        create_skill_in_dir(&talent_skills, "conflicting", "Existing version");
+
+        let importer = Importer::new(talent_skills);
+        let result = importer.import_from_external(
+            &external_folder.join("conflicting"),
+            "conflicting",
+            false,
+            false,
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn import_from_external_overwrites_when_flag_set() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        create_skill_in_dir(&external_folder, "to-overwrite", "New version");
+        create_skill_in_dir(&talent_skills, "to-overwrite", "Old version");
+
+        let importer = Importer::new(talent_skills.clone());
+        let result = importer.import_from_external(
+            &external_folder.join("to-overwrite"),
+            "to-overwrite",
+            false,
+            true, // overwrite = true
+        );
+
+        assert!(result.is_ok());
+
+        // Verify content was replaced
+        let skill = Skill::load(&talent_skills.join("to-overwrite")).unwrap();
+        assert_eq!(skill.description(), "New version");
+    }
+
+    #[test]
+    fn import_from_external_applies_fixes_when_requested() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        // Create skill with non-kebab name that needs fixing
+        let content = r#"---
+name: My_Bad_Name
+description: Needs normalization
+---
+
+# Skill
+"#;
+        create_skill_with_content(&external_folder, "My_Bad_Name", content);
+
+        let importer = Importer::new(talent_skills.clone());
+        let result = importer.import_from_external(
+            &external_folder.join("My_Bad_Name"),
+            "my-bad-name",
+            true, // apply_fixes = true
+            false,
+        );
+
+        assert!(result.is_ok());
+
+        // Load and verify the name was fixed
+        let skill = Skill::load(&talent_skills.join("my-bad-name")).unwrap();
+        assert_eq!(skill.name(), "my-bad-name");
+    }
+
+    #[test]
+    fn import_folder_selections_processes_all_resolutions() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        create_skill_in_dir(&external_folder, "to-import", "Will be imported");
+        create_skill_in_dir(&external_folder, "to-skip", "Will be skipped");
+        create_skill_in_dir(&external_folder, "to-overwrite", "New version");
+        create_skill_in_dir(&talent_skills, "to-overwrite", "Old version");
+
+        let importer = Importer::new(talent_skills.clone());
+
+        let selections = vec![
+            FolderImportSelection {
+                name: "to-import".to_string(),
+                source_path: external_folder.join("to-import"),
+                apply_fixes: false,
+                resolution: ConflictResolution::Import,
+            },
+            FolderImportSelection {
+                name: "to-skip".to_string(),
+                source_path: external_folder.join("to-skip"),
+                apply_fixes: false,
+                resolution: ConflictResolution::Skip,
+            },
+            FolderImportSelection {
+                name: "to-overwrite".to_string(),
+                source_path: external_folder.join("to-overwrite"),
+                apply_fixes: false,
+                resolution: ConflictResolution::Overwrite,
+            },
+        ];
+
+        let result = importer.import_folder_selections(&selections);
+
+        assert_eq!(result.imported, vec!["to-import", "to-overwrite"]);
+        assert_eq!(result.skipped, vec!["to-skip"]);
+        assert!(result.errors.is_empty());
+
+        // Verify filesystem state
+        assert!(talent_skills.join("to-import").exists());
+        assert!(!talent_skills.join("to-skip").exists());
+        assert!(talent_skills.join("to-overwrite").exists());
+
+        // Verify overwrite worked
+        let skill = Skill::load(&talent_skills.join("to-overwrite")).unwrap();
+        assert_eq!(skill.description(), "New version");
+    }
+
+    #[test]
+    fn import_folder_selections_collects_errors() {
+        let temp = TempDir::new().unwrap();
+        let external_folder = temp.path().join("external");
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&external_folder).unwrap();
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        // Create one valid skill and one that will fail (conflict without overwrite)
+        create_skill_in_dir(&external_folder, "valid-skill", "Will work");
+        create_skill_in_dir(&external_folder, "will-fail", "Should fail");
+        create_skill_in_dir(&talent_skills, "will-fail", "Existing");
+
+        let importer = Importer::new(talent_skills.clone());
+
+        let selections = vec![
+            FolderImportSelection {
+                name: "valid-skill".to_string(),
+                source_path: external_folder.join("valid-skill"),
+                apply_fixes: false,
+                resolution: ConflictResolution::Import,
+            },
+            FolderImportSelection {
+                name: "will-fail".to_string(),
+                source_path: external_folder.join("will-fail"),
+                apply_fixes: false,
+                resolution: ConflictResolution::Import, // No overwrite, will fail
+            },
+        ];
+
+        let result = importer.import_folder_selections(&selections);
+
+        assert_eq!(result.imported, vec!["valid-skill"]);
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.errors[0].0, "will-fail");
+    }
+
+    #[test]
+    fn import_folder_selections_empty_returns_empty_result() {
+        let temp = TempDir::new().unwrap();
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        let importer = Importer::new(talent_skills);
+        let result = importer.import_folder_selections(&[]);
+
+        assert!(result.imported.is_empty());
+        assert!(result.skipped.is_empty());
+        assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn check_conflict_returns_none_when_no_conflict() {
+        let temp = TempDir::new().unwrap();
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&talent_skills).unwrap();
+
+        let importer = Importer::new(talent_skills);
+        let conflict = importer.check_conflict("nonexistent-skill");
+
+        assert!(conflict.is_none());
+    }
+
+    #[test]
+    fn check_conflict_returns_info_when_exists() {
+        let temp = TempDir::new().unwrap();
+        let talent_skills = temp.path().join("talent");
+
+        fs::create_dir_all(&talent_skills).unwrap();
+        create_skill_in_dir(&talent_skills, "existing", "Existing skill description");
+
+        let importer = Importer::new(talent_skills);
+        let conflict = importer.check_conflict("existing");
+
+        assert!(conflict.is_some());
+        let info = conflict.unwrap();
+        assert_eq!(info.existing_description, "Existing skill description");
+    }
 }
