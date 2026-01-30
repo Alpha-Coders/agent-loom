@@ -118,3 +118,9 @@ export async function scanFolderForSkills(path: string): Promise<ScannedSkillInf
 export async function importFromFolder(selections: FolderImportSelectionInfo[]): Promise<ImportResultInfo> {
   return invoke<ImportResultInfo>('import_from_folder', { selections });
 }
+
+// Finder integration
+
+export async function revealInFinder(path: string): Promise<void> {
+  return invoke<void>('reveal_in_finder', { path });
+}

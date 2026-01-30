@@ -50,10 +50,10 @@ pub fn create_menu(app: &AppHandle) -> Result<Menu<Wry>, tauri::Error> {
 
     file_menu.append(&PredefinedMenuItem::separator(app)?)?;
 
-    // Save (Cmd+S) - disabled by default, enabled when editing with changes
+    // Save (Cmd+S) - always enabled, handler checks state
     let save = MenuItemBuilder::with_id(SAVE_ID, "Save")
         .accelerator("CmdOrCtrl+S")
-        .enabled(false)
+        .enabled(true)
         .build(app)?;
     file_menu.append(&save)?;
 
