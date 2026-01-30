@@ -116,8 +116,8 @@
     const id = ++snackbarId;
     snackbars = [...snackbars, { id, message, type }];
 
-    // Only auto-dismiss success and info; warnings and errors require manual dismissal
-    if (type === 'success' || type === 'info') {
+    // Only errors require manual dismissal; success, info, and warnings auto-dismiss
+    if (type !== 'error') {
       setTimeout(() => {
         snackbars = snackbars.filter(s => s.id !== id);
       }, duration);
