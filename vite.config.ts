@@ -8,9 +8,9 @@ export default defineConfig({
   // Prevent vite from obscuring Rust errors
   clearScreen: false,
 
-  // Tauri expects a fixed port, fail if that port is not available
+  // Port is set dynamically by scripts/dev.js to avoid conflicts
   server: {
-    port: 5173,
+    port: parseInt(process.env.VITE_DEV_PORT || '5173', 10),
     strictPort: true,
     watch: {
       // Tell vite to ignore watching `src-tauri`
