@@ -113,8 +113,12 @@ impl TargetKind {
 
     /// Get the skills subdirectory name within the config dir
     fn skills_subdir(&self) -> &'static str {
-        // All targets use "skills" directory
-        "skills"
+        match self {
+            // Cursor uses "skills-cursor" subdirectory
+            TargetKind::Cursor => "skills-cursor",
+            // All other targets use "skills" directory
+            _ => "skills",
+        }
     }
 }
 
@@ -341,5 +345,14 @@ mod tests {
         let target = Target::new(TargetKind::ClaudeCode, skills_path);
         let result = target.validate();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cursor_uses_skills_cursor_subdir() {
+        // Cursor uses "skills-cursor" instead of "skills"
+        assert_eq!(TargetKind::Cursor.skills_subdir(), "skills-cursor");
+        // Other targets use "skills"
+        assert_eq!(TargetKind::ClaudeCode.skills_subdir(), "skills");
+        assert_eq!(TargetKind::Codex.skills_subdir(), "skills");
     }
 }

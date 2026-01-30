@@ -569,7 +569,7 @@
     {#if error}
       <div class="error-banner">
         <span>{error}</span>
-        <button onclick={() => error = null}>
+        <button onclick={() => error = null} aria-label="Dismiss error">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
           </svg>
@@ -595,14 +595,15 @@
 
         <div class="form-field">
           <label for="skill-name">Name</label>
+          <!-- svelte-ignore a11y_autofocus -->
           <input
             id="skill-name"
             type="text"
             placeholder="my-awesome-skill"
             bind:value={newSkillName}
             autofocus
-            autocorrect="off"
             autocapitalize="off"
+            spellcheck="false"
           />
           {#if newSkillName.trim()}
             <div class="field-hint">
@@ -618,8 +619,8 @@
             placeholder="What does this skill do?"
             bind:value={newSkillDescription}
             rows="2"
-            autocorrect="off"
             autocapitalize="off"
+            spellcheck="false"
           ></textarea>
         </div>
 
@@ -655,7 +656,7 @@
             </div>
           {/if}
         </div>
-        <button onclick={() => lastSyncResults = []}>
+        <button onclick={() => lastSyncResults = []} aria-label="Dismiss sync results">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
           </svg>
@@ -669,7 +670,7 @@
           {#if lastImportResult.errors.length > 0}⚠{:else}✓{/if}
           Imported: {lastImportResult.imported.length} skills
         </span>
-        <button onclick={() => lastImportResult = null}>
+        <button onclick={() => lastImportResult = null} aria-label="Dismiss import results">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
           </svg>
@@ -768,7 +769,7 @@
     {#each snackbars as snackbar (snackbar.id)}
       <div class="snackbar snackbar-{snackbar.type}">
         <span>{snackbar.message}</span>
-        <button onclick={() => dismissSnackbar(snackbar.id)}>
+        <button onclick={() => dismissSnackbar(snackbar.id)} aria-label="Dismiss notification">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
           </svg>
