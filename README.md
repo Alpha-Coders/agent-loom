@@ -107,6 +107,10 @@ See [Architecture Documentation](docs/ARCHITECTURE.md) for detailed technical in
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+## Credits
+
+Using beautiful icons from [Lucide](https://lucide.dev/).
+
 ## License
 
 [MIT](LICENSE)
