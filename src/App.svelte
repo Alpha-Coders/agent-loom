@@ -1078,7 +1078,7 @@
       <div class="snackbar snackbar-{snackbar.type}">
         <span>{snackbar.message}</span>
         <button onclick={() => dismissSnackbar(snackbar.id)} aria-label="Dismiss notification">
-          <X class="icon" size={16} strokeWidth={1.5} />
+          <X size={16} strokeWidth={1.5} />
         </button>
       </div>
     {/each}
@@ -2230,23 +2230,28 @@
 
   .snackbar button {
     flex-shrink: 0;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     padding: 0;
-    background: none;
-    border: none;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     color: var(--color-text-muted);
     cursor: pointer;
-    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   }
 
   .snackbar button:hover {
+    background: var(--color-surface);
+    border-color: var(--color-surface-hover);
     color: var(--color-text);
-    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .snackbar button:active {
+    transform: scale(0.92);
   }
 
   .snackbar-success {
