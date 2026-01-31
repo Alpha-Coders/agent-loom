@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Puzzle } from 'lucide-svelte';
+
   export type Tab = 'skills';
 
   interface Props {
@@ -16,6 +18,7 @@
 
 <div class="app-section">
   <div class="app-header">
+    <Puzzle class="app-icon" size={16} strokeWidth={1.5} />
     <span class="app-name">AgentLoom</span>
   </div>
   <div class="tab-list">
@@ -40,10 +43,16 @@
     height: var(--titlebar-height);
     display: flex;
     align-items: center;
+    gap: var(--space-2);
     padding: 0 var(--toolbar-padding-x);
     border-bottom: 1px solid var(--color-border);
     -webkit-app-region: drag;
     transition: border-color var(--theme-transition);
+  }
+
+  .app-header :global(.app-icon) {
+    color: var(--color-primary);
+    flex-shrink: 0;
   }
 
   .app-name {
