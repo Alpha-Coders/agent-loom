@@ -9,7 +9,9 @@
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
   import TabBar, { type Tab } from './lib/TabBar.svelte';
-  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Sun, Moon, Monitor } from 'lucide-svelte';
+  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Sun, Moon, Monitor, Power, type Icon } from 'lucide-svelte';
+  import { OverlayScrollbarsComponent } from 'overlayscrollbars-svelte';
+  import 'overlayscrollbars/overlayscrollbars.css';
 
   // Tab state
   let activeTab = $state<Tab>('skills');
@@ -70,6 +72,7 @@
   // Context menu state
   interface ContextMenuItem {
     label: string;
+    icon?: typeof Icon;
     action: () => void;
     destructive?: boolean;
     disabled?: boolean;
@@ -559,10 +562,12 @@
     const items: ContextMenuItem[] = [
       {
         label: 'Edit',
+        icon: FilePenLine,
         action: () => handleEditSkill(skill),
       },
       {
         label: 'Reveal in Finder',
+        icon: FolderOpen,
         action: async () => {
           try {
             await revealInFinder(skill.path);
@@ -573,6 +578,7 @@
       },
       {
         label: 'Delete',
+        icon: Trash2,
         action: () => handleDeleteSkill(skill, event),
         destructive: true,
       },
@@ -584,10 +590,12 @@
     const items: ContextMenuItem[] = [
       {
         label: target.enabled ? 'Disable' : 'Enable',
+        icon: Power,
         action: () => handleToggleTarget(target.id),
       },
       {
         label: 'Reveal in Finder',
+        icon: FolderOpen,
         action: async () => {
           try {
             await revealInFinder(target.skills_path);
@@ -622,6 +630,16 @@
 
   // Event listener cleanup
   let unlistenFns: UnlistenFn[] = [];
+
+  // Prevent native context menu globally (except on inputs where it's useful)
+  function handleGlobalContextMenu(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    // Allow native context menu on text inputs for copy/paste
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('.cm-editor')) {
+      return;
+    }
+    event.preventDefault();
+  }
 
   // Prevent macOS beep on non-input keystrokes + additional keyboard shortcuts
   function handleKeydown(event: KeyboardEvent) {
@@ -719,11 +737,13 @@
     }));
 
     document.addEventListener('keydown', handleKeydown);
+    document.addEventListener('contextmenu', handleGlobalContextMenu);
   });
 
   onDestroy(() => {
     unlistenFns.forEach(fn => fn());
     document.removeEventListener('keydown', handleKeydown);
+    document.removeEventListener('contextmenu', handleGlobalContextMenu);
   });
 </script>
 
@@ -746,7 +766,7 @@
         </button>
       </div>
 
-      <div class="targets-list-container">
+      <OverlayScrollbarsComponent class="targets-list-container" options={{ scrollbars: { autoHide: 'scroll', autoHideDelay: 1000 } }} defer>
         <div class="targets-list">
           {#each targets as target}
             {@const syncStatus = target.sync_status}
@@ -784,7 +804,7 @@
             <div class="targets-empty">No targets detected</div>
           {/if}
         </div>
-      </div>
+      </OverlayScrollbarsComponent>
 
       <div class="targets-toolbar">
         <button class="sync-button" onclick={handleSync} disabled={isSyncing}>
@@ -864,16 +884,14 @@
         </div>
       {/if}
 
-      <div class="skills-list">
+      <OverlayScrollbarsComponent class="skills-list" options={{ scrollbars: { autoHide: 'scroll', autoHideDelay: 1000 } }} defer>
         {#if isLoading}
           <div class="loading">Loading...</div>
         {:else if skills.length === 0}
           <div class="empty-state">
-            <div class="empty-icon">
-              <Sparkles class="empty-icon-sparkle" size={32} strokeWidth={1.5} />
-            </div>
-            <p class="empty-title">No skills yet</p>
-            <p class="empty-subtitle">Create your first skill to get started</p>
+            <Sparkles class="empty-state-icon" size={40} strokeWidth={1} />
+            <p class="empty-state-title">No skills yet</p>
+            <p class="empty-state-hint">Create a new skill to get started</p>
           </div>
         {:else}
           {#each skills as skill}
@@ -896,7 +914,7 @@
             </div>
           {/each}
         {/if}
-      </div>
+      </OverlayScrollbarsComponent>
     </div>
 
     <div class="skills-toolbar">
@@ -1011,10 +1029,10 @@
       </div>
     {:else}
       <div class="editor-placeholder-full">
-        <div class="placeholder-content">
-          <FilePenLine class="placeholder-icon" size={48} strokeWidth={1} />
-          <p class="placeholder-title">No Selection</p>
-          <p class="placeholder-hint">Select a skill to edit, or create a new one</p>
+        <div class="empty-state">
+          <FilePenLine class="empty-state-icon" size={40} strokeWidth={1} />
+          <p class="empty-state-title">No Selection</p>
+          <p class="empty-state-hint">Select a skill to edit</p>
         </div>
       </div>
     {/if}
@@ -1046,10 +1064,11 @@
 {#if contextMenu}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="context-menu-backdrop" onclick={hideContextMenu}></div>
+  <div class="context-menu-backdrop" onclick={hideContextMenu} oncontextmenu={(e) => { e.preventDefault(); hideContextMenu(); }}></div>
   <div
     class="context-menu"
     style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+    oncontextmenu={(e) => e.preventDefault()}
   >
     {#each contextMenu.items as item}
       <button
@@ -1058,7 +1077,10 @@
         disabled={item.disabled}
         onclick={() => { item.action(); hideContextMenu(); }}
       >
-        {item.label}
+        {#if item.icon}
+          <svelte:component this={item.icon} class="context-menu-icon" size={14} strokeWidth={1.5} />
+        {/if}
+        <span>{item.label}</span>
       </button>
     {/each}
   </div>
@@ -1094,6 +1116,10 @@
 
     /* macOS traffic light area */
     --titlebar-height: 52px;
+
+    /* Toolbar dimensions */
+    --toolbar-height: 48px;
+    --toolbar-padding-x: 12px;
 
     /* Typography */
     --font-xs: 11px;
@@ -1203,6 +1229,28 @@
   }
 
   /* ============================================
+     OVERLAYSCROLLBARS THEME (macOS-like)
+     ============================================ */
+  :global(.os-scrollbar) {
+    --os-size: 10px;
+    --os-padding-perpendicular: 2px;
+    --os-padding-axis: 2px;
+    --os-track-border-radius: 4px;
+    --os-handle-border-radius: 4px;
+    --os-handle-bg: rgba(128, 128, 128, 0.4);
+    --os-handle-bg-hover: rgba(128, 128, 128, 0.55);
+    --os-handle-bg-active: rgba(128, 128, 128, 0.7);
+    transition: opacity 0.3s ease;
+  }
+
+  /* Light theme scrollbar adjustments */
+  :root[data-theme="light"] :global(.os-scrollbar) {
+    --os-handle-bg: rgba(0, 0, 0, 0.25);
+    --os-handle-bg-hover: rgba(0, 0, 0, 0.4);
+    --os-handle-bg-active: rgba(0, 0, 0, 0.55);
+  }
+
+  /* ============================================
      ICONS (SF Symbols style)
      ============================================ */
   .icon {
@@ -1237,10 +1285,9 @@
   .pane-header {
     height: var(--titlebar-height);
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
-    padding: 0 var(--space-4);
-    padding-bottom: var(--space-2);
+    padding: 20px var(--toolbar-padding-x) 0; /* Top padding for traffic lights */
     border-bottom: 1px solid var(--color-border);
     -webkit-app-region: drag;
     flex-shrink: 0;
@@ -1253,8 +1300,7 @@
     font-weight: var(--font-weight-semibold);
     color: var(--color-text);
     white-space: nowrap;
-    line-height: 28px; /* Match button height for alignment */
-    height: 28px;
+    line-height: 1;
     transition: color var(--theme-transition);
   }
 
@@ -1263,7 +1309,6 @@
     align-items: center;
     gap: var(--space-2);
     -webkit-app-region: no-drag;
-    height: 28px;
   }
 
   .pane-action {
@@ -1271,19 +1316,20 @@
     height: 28px;
     padding: 0;
     background: transparent;
-    border: none;
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     color: var(--color-text-muted);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
     -webkit-app-region: no-drag;
   }
 
   .pane-action:hover:not(:disabled) {
     background: var(--color-surface);
+    border-color: var(--color-surface-hover);
     color: var(--color-text);
   }
 
@@ -1300,10 +1346,11 @@
     background: var(--color-primary);
     color: white;
     width: auto;
-    height: 26px;
+    height: 28px;
     padding: 0 var(--space-3);
     font-size: var(--font-xs);
     font-weight: var(--font-weight-medium);
+    border: none;
     border-radius: var(--radius-sm);
     transition: background 0.15s ease, box-shadow 0.2s ease, transform 0.1s ease;
   }
@@ -1361,18 +1408,19 @@
     height: 22px;
     padding: 0;
     background: transparent;
-    border: none;
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     color: var(--color-text-muted);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
 
   .section-action:hover {
     background: var(--color-surface);
+    border-color: var(--color-surface-hover);
     color: var(--color-text);
   }
 
@@ -1380,10 +1428,9 @@
     transform: scale(0.92);
   }
 
-  .targets-list-container {
+  :global(.targets-list-container) {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    min-height: 0; /* Allow flex shrinking */
     padding: 0 var(--space-2);
   }
 
@@ -1466,19 +1513,23 @@
   }
 
   .sidebar-footer {
-    padding: var(--space-3) var(--space-3);
+    height: var(--toolbar-height);
+    display: flex;
+    align-items: center;
+    padding: 0 var(--toolbar-padding-x);
     border-top: 1px solid var(--color-border);
     flex-shrink: 0;
     transition: border-color var(--theme-transition);
   }
 
   .theme-toggle {
+    height: 28px;
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-1) var(--space-2);
+    padding: 0 var(--space-2);
     background: transparent;
-    border: none;
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     color: var(--color-text-muted);
     font-size: var(--font-xs);
@@ -1487,7 +1538,8 @@
   }
 
   .theme-toggle:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-surface);
+    border-color: var(--color-surface-hover);
     color: var(--color-text);
   }
 
@@ -1496,17 +1548,21 @@
   }
 
   .targets-toolbar {
-    padding: var(--space-3);
+    height: var(--toolbar-height);
+    display: flex;
+    align-items: center;
+    padding: 0 var(--toolbar-padding-x);
     flex-shrink: 0;
   }
 
   .sync-button {
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
     width: 100%;
-    padding: var(--space-2) var(--space-3);
+    padding: 0 var(--space-3);
     background: var(--color-primary);
     color: white;
     border: none;
@@ -1579,18 +1635,22 @@
     overflow: hidden;
   }
 
-  .skills-list {
+  :global(.skills-list) {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: var(--space-2) 0;
+    min-height: 0; /* Allow flex shrinking */
+  }
+
+  :global(.skills-list [data-overlayscrollbars-viewport]) {
+    display: flex;
+    flex-direction: column;
   }
 
   .skills-toolbar {
+    height: var(--toolbar-height);
     display: flex;
     align-items: center;
     gap: var(--space-1);
-    padding: var(--space-3);
+    padding: 0 var(--toolbar-padding-x);
     border-top: 1px solid var(--color-border);
     flex-shrink: 0;
     transition: border-color var(--theme-transition);
@@ -1601,18 +1661,19 @@
     height: 28px;
     padding: 0;
     background: transparent;
-    border: none;
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     color: var(--color-text-muted);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
 
   .toolbar-icon-button:hover:not(:disabled) {
     background: var(--color-surface);
+    border-color: var(--color-surface-hover);
     color: var(--color-text);
   }
 
@@ -1631,6 +1692,7 @@
 
   .toolbar-button.primary {
     background: var(--color-primary);
+    border: none;
     color: white;
   }
 
@@ -1746,20 +1808,11 @@
   /* ============================================
      SKILL LIST ITEMS
      ============================================ */
-  .loading, .empty-state {
+  .loading {
     padding: var(--space-8) var(--space-4);
     text-align: center;
     color: var(--color-text-muted);
     font-size: var(--font-sm);
-    animation: fade-in 0.3s ease;
-  }
-
-  @keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  .loading {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1780,6 +1833,9 @@
     to { transform: rotate(360deg); }
   }
 
+  /* ============================================
+     EMPTY STATE (Shared)
+     ============================================ */
   .empty-state {
     display: flex;
     flex-direction: column;
@@ -1787,31 +1843,22 @@
     justify-content: center;
     padding: var(--space-8) var(--space-4);
     flex: 1;
+    text-align: center;
   }
 
-  .empty-icon {
-    margin-bottom: var(--space-4);
-    animation: float 3s ease-in-out infinite;
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
-  }
-
-  .empty-icon :global(.empty-icon-sparkle) {
+  .empty-state :global(.empty-state-icon) {
     color: var(--color-text-dim);
-    opacity: 0.6;
+    margin-bottom: var(--space-4);
   }
 
-  .empty-title {
+  .empty-state-title {
     margin: 0;
     font-size: var(--font-base);
     font-weight: var(--font-weight-medium);
     color: var(--color-text-secondary);
   }
 
-  .empty-subtitle {
+  .empty-state-hint {
     margin: var(--space-2) 0 0 0;
     font-size: var(--font-xs);
     color: var(--color-text-dim);
@@ -2016,10 +2063,11 @@
   }
 
   .editor-toolbar {
+    height: var(--toolbar-height);
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    padding: var(--space-3) var(--space-4);
+    padding: 0 var(--toolbar-padding-x);
     border-top: 1px solid var(--color-border);
     background: var(--color-sidebar);
     flex-shrink: 0;
@@ -2029,10 +2077,11 @@
   }
 
   .toolbar-button {
+    height: 28px;
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
+    padding: 0 var(--space-3);
     background: transparent;
     border: none;
     border-radius: var(--radius-md);
@@ -2040,7 +2089,7 @@
     font-size: var(--font-xs);
     font-family: inherit;
     cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
 
   .toolbar-button:hover {
@@ -2048,8 +2097,13 @@
     color: var(--color-text);
   }
 
+  .toolbar-button.destructive {
+    border: 1px solid var(--color-border);
+  }
+
   .toolbar-button.destructive:hover {
     background: rgba(255, 69, 58, 0.15);
+    border-color: var(--color-error);
     color: var(--color-error);
   }
 
@@ -2065,13 +2119,6 @@
   }
 
   /* Editor Placeholder */
-  .editor-placeholder {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
   .editor-placeholder-full {
     flex: 1;
     display: flex;
@@ -2080,66 +2127,8 @@
     -webkit-app-region: drag;
   }
 
-  .editor-placeholder-full .placeholder-content {
+  .editor-placeholder-full .empty-state {
     -webkit-app-region: no-drag;
-  }
-
-  .placeholder-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-
-  .placeholder-content :global(.placeholder-icon) {
-    color: var(--color-text-dim);
-    opacity: 0.4;
-    margin-bottom: var(--space-4);
-    animation: float 3s ease-in-out infinite;
-  }
-
-  .placeholder-title {
-    margin: 0;
-    font-size: var(--font-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-muted);
-  }
-
-  .placeholder-hint {
-    margin: var(--space-1) 0 0 0;
-    font-size: var(--font-sm);
-    color: var(--color-text-dim);
-  }
-
-  .placeholder-action {
-    margin-top: var(--space-5);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-5);
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease;
-  }
-
-  .placeholder-action :global(.icon) {
-    flex-shrink: 0;
-  }
-
-  .placeholder-action:hover {
-    background: var(--color-primary-hover);
-    box-shadow: 0 4px 20px rgba(10, 132, 255, 0.4);
-  }
-
-  .placeholder-action:active {
-    transform: scale(0.97);
-    box-shadow: 0 2px 10px rgba(10, 132, 255, 0.3);
   }
 
   /* New Skill Form in Editor Pane */
@@ -2413,7 +2402,9 @@
   }
 
   .context-menu-item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     width: 100%;
     padding: var(--space-2) var(--space-3);
     background: none;
@@ -2425,6 +2416,11 @@
     text-align: left;
     cursor: pointer;
     transition: background 0.1s ease;
+  }
+
+  .context-menu-item :global(.context-menu-icon) {
+    flex-shrink: 0;
+    opacity: 0.7;
   }
 
   .context-menu-item:hover:not(:disabled) {

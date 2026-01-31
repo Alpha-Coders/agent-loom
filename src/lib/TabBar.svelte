@@ -34,17 +34,16 @@
 <style>
   .app-section {
     flex-shrink: 0;
-    border-bottom: 1px solid var(--color-border);
-    transition: border-color var(--theme-transition);
   }
 
   .app-header {
     height: var(--titlebar-height);
     display: flex;
-    align-items: flex-end;
-    padding: 0 var(--space-4);
-    padding-bottom: var(--space-2);
+    align-items: center;
+    padding: 20px var(--toolbar-padding-x) 0;
+    border-bottom: 1px solid var(--color-border);
     -webkit-app-region: drag;
+    transition: border-color var(--theme-transition);
   }
 
   .app-name {
