@@ -104,14 +104,24 @@ grep -r "Reflection Loop" agents/reference/
 - Custom commit scripts -> Use instead of `/commit`
 - Custom PR scripts -> Use instead of `/commit-push-pr`
 
-## Git Workflow
+## Git Workflow (Open Source)
 
-**Push directly to main. Do not create pull requests.**
+**Read `CONTRIBUTING.md` for the full contribution guide.**
 
-When asked to commit and push:
-1. Commit changes on the current branch (main)
-2. Push directly to `origin main`
-3. Do NOT create feature branches or PRs
+This is an open source project. Always use feature branches and pull requests:
+
+1. Create a feature branch: `git checkout -b feature/short-description` or `fix/short-description`
+2. Make changes and commit with descriptive messages
+3. Push to origin: `git push -u origin feature/short-description`
+4. Open a Pull Request against `main`
+5. Ensure CI checks pass before merging
+
+### Branch Naming Convention
+
+- `feature/` - New features
+- `fix/` - Bug fixes
+- `docs/` - Documentation updates
+- `refactor/` - Code refactoring
 
 ### Installing Plugins
 
