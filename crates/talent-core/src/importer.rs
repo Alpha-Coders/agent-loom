@@ -317,8 +317,7 @@ impl Importer {
 
         // Extract frontmatter for normalization check
         let trimmed = contents.trim_start();
-        let (yaml_content, _body) = if trimmed.starts_with("---") {
-            let after_first = &trimmed[3..];
+        let (yaml_content, _body) = if let Some(after_first) = trimmed.strip_prefix("---") {
             match after_first.find("\n---") {
                 Some(end_idx) => (
                     after_first[..end_idx].trim().to_string(),
