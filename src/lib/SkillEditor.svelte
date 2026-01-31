@@ -18,6 +18,7 @@
   let editorContainer: HTMLDivElement;
   let view: EditorView | null = null;
   let themeCompartment = new Compartment();
+  let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Light theme for CodeMirror
   const lightTheme = EditorView.theme({
@@ -153,9 +154,38 @@
       state,
       parent: editorContainer,
     });
+
+    // Add scroll listener for auto-hide scrollbar effect
+    const scroller = editorContainer.querySelector('.cm-scroller');
+    if (scroller) {
+      scroller.addEventListener('scroll', handleScroll);
+    }
+  }
+
+  function handleScroll() {
+    // Add scrolling class to show scrollbar
+    editorContainer?.classList.add('is-scrolling');
+
+    // Clear existing timeout
+    if (scrollTimeout) {
+      clearTimeout(scrollTimeout);
+    }
+
+    // Hide scrollbar after 1s of inactivity
+    scrollTimeout = setTimeout(() => {
+      editorContainer?.classList.remove('is-scrolling');
+    }, 1000);
   }
 
   function destroyEditor() {
+    if (scrollTimeout) {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = null;
+    }
+    const scroller = editorContainer?.querySelector('.cm-scroller');
+    if (scroller) {
+      scroller.removeEventListener('scroll', handleScroll);
+    }
     if (view) {
       view.destroy();
       view = null;
@@ -223,5 +253,57 @@
 
   .editor-wrapper :global(.cm-focused) {
     outline: none;
+  }
+
+  /* Native scrollbar auto-hide for CodeMirror */
+  .editor-wrapper :global(.cm-scroller) {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .editor-wrapper :global(.cm-scroller::-webkit-scrollbar) {
+    width: 8px;
+    height: 8px;
+  }
+
+  .editor-wrapper :global(.cm-scroller::-webkit-scrollbar-track) {
+    background: transparent;
+  }
+
+  .editor-wrapper :global(.cm-scroller::-webkit-scrollbar-thumb) {
+    background: transparent;
+    border-radius: 4px;
+  }
+
+  /* Show scrollbar when scrolling or hovering */
+  .editor-wrapper.is-scrolling :global(.cm-scroller::-webkit-scrollbar-thumb),
+  .editor-wrapper:hover :global(.cm-scroller::-webkit-scrollbar-thumb) {
+    background: rgba(128, 128, 128, 0.4);
+  }
+
+  .editor-wrapper.is-scrolling :global(.cm-scroller::-webkit-scrollbar-thumb:hover),
+  .editor-wrapper:hover :global(.cm-scroller::-webkit-scrollbar-thumb:hover) {
+    background: rgba(128, 128, 128, 0.6);
+  }
+
+  .editor-wrapper.is-scrolling :global(.cm-scroller),
+  .editor-wrapper:hover :global(.cm-scroller) {
+    scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
+  }
+
+  /* Light theme */
+  :global([data-theme="light"]) .editor-wrapper.is-scrolling :global(.cm-scroller::-webkit-scrollbar-thumb),
+  :global([data-theme="light"]) .editor-wrapper:hover :global(.cm-scroller::-webkit-scrollbar-thumb) {
+    background: rgba(0, 0, 0, 0.25);
+  }
+
+  :global([data-theme="light"]) .editor-wrapper.is-scrolling :global(.cm-scroller::-webkit-scrollbar-thumb:hover),
+  :global([data-theme="light"]) .editor-wrapper:hover :global(.cm-scroller::-webkit-scrollbar-thumb:hover) {
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  :global([data-theme="light"]) .editor-wrapper.is-scrolling :global(.cm-scroller),
+  :global([data-theme="light"]) .editor-wrapper:hover :global(.cm-scroller) {
+    scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
   }
 </style>
