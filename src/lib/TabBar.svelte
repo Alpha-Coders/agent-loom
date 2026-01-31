@@ -1,14 +1,17 @@
 <script lang="ts">
-  import { Puzzle } from 'lucide-svelte';
+  import { Puzzle, Palette, Sun, Moon } from 'lucide-svelte';
 
   export type Tab = 'skills';
+  export type ThemeMode = 'system' | 'light' | 'dark';
 
   interface Props {
     activeTab: Tab;
     onTabChange: (tab: Tab) => void;
+    themeMode: ThemeMode;
+    onThemeToggle: () => void;
   }
 
-  let { activeTab, onTabChange }: Props = $props();
+  let { activeTab, onTabChange, themeMode, onThemeToggle }: Props = $props();
 
   // Tab definitions - easy to extend by adding more items
   const tabs: { id: Tab; label: string }[] = [
@@ -20,6 +23,15 @@
   <div class="app-header">
     <Puzzle class="app-icon" size={16} strokeWidth={1.5} />
     <span class="app-name">AgentLoom</span>
+    <button class="theme-toggle" onclick={onThemeToggle} title="Color scheme: {themeMode}">
+      {#if themeMode === 'system'}
+        <Palette size={14} strokeWidth={1.5} />
+      {:else if themeMode === 'light'}
+        <Sun size={14} strokeWidth={1.5} />
+      {:else}
+        <Moon size={14} strokeWidth={1.5} />
+      {/if}
+    </button>
   </div>
   <div class="tab-list">
     {#each tabs as tab}
@@ -56,10 +68,37 @@
   }
 
   .app-name {
+    flex: 1;
     font-size: var(--font-sm);
     font-weight: var(--font-weight-semibold);
     color: var(--color-text);
     transition: color var(--theme-transition);
+  }
+
+  .theme-toggle {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .theme-toggle:hover {
+    background: var(--color-surface);
+    border-color: var(--color-surface-hover);
+    color: var(--color-text);
+  }
+
+  .theme-toggle:active {
+    transform: scale(0.96);
   }
 
   .tab-list {
