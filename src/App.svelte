@@ -1833,10 +1833,10 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-3) var(--space-3);
     border-bottom: 1px solid var(--color-border);
     cursor: pointer;
-    min-height: 56px;
+    min-height: 64px;
     box-sizing: border-box;
     position: relative;
     transition:
