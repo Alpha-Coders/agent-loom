@@ -217,9 +217,7 @@ impl Importer {
                     let target_canonical = if target.is_absolute() {
                         target
                     } else {
-                        path.parent()
-                            .map(|p| p.join(&target))
-                            .unwrap_or(target)
+                        path.parent().map(|p| p.join(&target)).unwrap_or(target)
                     };
 
                     // Check if the target is under our skills directory
@@ -289,10 +287,9 @@ impl Importer {
             if entry_path.file_name().is_some_and(|n| n == SKILL_FILE_NAME) {
                 if let Some(skill_dir) = entry_path.parent() {
                     // Skip if this is inside our own skills directory
-                    if let (Ok(skill_abs), Ok(talent_abs)) = (
-                        skill_dir.canonicalize(),
-                        self.skills_dir.canonicalize(),
-                    ) {
+                    if let (Ok(skill_abs), Ok(talent_abs)) =
+                        (skill_dir.canonicalize(), self.skills_dir.canonicalize())
+                    {
                         if skill_abs.starts_with(&talent_abs) {
                             continue;
                         }
@@ -965,7 +962,10 @@ description: A skill with non-kebab name
 
         // Skill should be copied to talent
         assert!(talent_skills.join("my-skill").exists());
-        assert!(talent_skills.join("my-skill").join(SKILL_FILE_NAME).exists());
+        assert!(talent_skills
+            .join("my-skill")
+            .join(SKILL_FILE_NAME)
+            .exists());
 
         // Source should NOT be removed (unlike regular import)
         assert!(source_path.exists());
