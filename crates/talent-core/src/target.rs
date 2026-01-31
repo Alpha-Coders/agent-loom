@@ -305,10 +305,18 @@ pub struct TargetInfo {
 
 impl TargetInfo {
     /// Create TargetInfo from a Target, optionally checking sync status
-    pub fn from_target(target: &Target, central_skills: Option<&[String]>, skills_dir: Option<&PathBuf>) -> Self {
+    pub fn from_target(
+        target: &Target,
+        central_skills: Option<&[String]>,
+        skills_dir: Option<&PathBuf>,
+    ) -> Self {
         let sync_status = if target.enabled && target.skills_dir_exists() {
             central_skills.map(|skills| {
-                check_sync_status(target, skills, skills_dir.expect("skills_dir required when central_skills provided"))
+                check_sync_status(
+                    target,
+                    skills,
+                    skills_dir.expect("skills_dir required when central_skills provided"),
+                )
             })
         } else {
             None
@@ -341,7 +349,11 @@ impl From<&Target> for TargetInfo {
 }
 
 /// Check sync status of a target against central skills
-fn check_sync_status(target: &Target, central_skill_names: &[String], skills_dir: &PathBuf) -> SyncStatus {
+fn check_sync_status(
+    target: &Target,
+    central_skill_names: &[String],
+    skills_dir: &PathBuf,
+) -> SyncStatus {
     use std::fs;
 
     let mut status = SyncStatus {
@@ -476,7 +488,11 @@ mod tests {
     #[test]
     fn target_new_folder_creates_custom_target() {
         let path = PathBuf::from("/custom/folder");
-        let target = Target::new_folder(path.clone(), "folder-test".to_string(), "Test Folder".to_string());
+        let target = Target::new_folder(
+            path.clone(),
+            "folder-test".to_string(),
+            "Test Folder".to_string(),
+        );
 
         assert_eq!(target.kind, None);
         assert_eq!(target.skills_path, path);
@@ -528,10 +544,7 @@ mod tests {
 
         let result = target.validate();
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            Error::TargetNotFound { .. }
-        ));
+        assert!(matches!(result.unwrap_err(), Error::TargetNotFound { .. }));
     }
 
     #[test]

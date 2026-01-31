@@ -2,11 +2,11 @@
 //!
 //! Command-line interface for managing skills across AI CLI tools.
 
-use clap::Parser;
 use agentloom_core::{
     Config, ConflictResolution, ImportSelection, Importer, SkillManager, SyncResult,
     ValidationStatus,
 };
+use clap::Parser;
 
 #[derive(Parser)]
 #[command(name = "agentloom")]
