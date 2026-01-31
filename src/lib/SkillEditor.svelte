@@ -276,33 +276,33 @@
   }
 
   /* Show scrollbar when scrolling or hovering */
-  .editor-wrapper.is-scrolling :global(.cm-scroller::-webkit-scrollbar-thumb),
+  :global(.editor-wrapper.is-scrolling) :global(.cm-scroller::-webkit-scrollbar-thumb),
   .editor-wrapper:hover :global(.cm-scroller::-webkit-scrollbar-thumb) {
     background: rgba(128, 128, 128, 0.4);
   }
 
-  .editor-wrapper.is-scrolling :global(.cm-scroller::-webkit-scrollbar-thumb:hover),
+  :global(.editor-wrapper.is-scrolling) :global(.cm-scroller::-webkit-scrollbar-thumb:hover),
   .editor-wrapper:hover :global(.cm-scroller::-webkit-scrollbar-thumb:hover) {
     background: rgba(128, 128, 128, 0.6);
   }
 
-  .editor-wrapper.is-scrolling :global(.cm-scroller),
+  :global(.editor-wrapper.is-scrolling) :global(.cm-scroller),
   .editor-wrapper:hover :global(.cm-scroller) {
     scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
   }
 
   /* Light theme */
-  :global([data-theme="light"]) .editor-wrapper.is-scrolling :global(.cm-scroller::-webkit-scrollbar-thumb),
+  :global([data-theme="light"] .editor-wrapper.is-scrolling) :global(.cm-scroller::-webkit-scrollbar-thumb),
   :global([data-theme="light"]) .editor-wrapper:hover :global(.cm-scroller::-webkit-scrollbar-thumb) {
     background: rgba(0, 0, 0, 0.25);
   }
 
-  :global([data-theme="light"]) .editor-wrapper.is-scrolling :global(.cm-scroller::-webkit-scrollbar-thumb:hover),
+  :global([data-theme="light"] .editor-wrapper.is-scrolling) :global(.cm-scroller::-webkit-scrollbar-thumb:hover),
   :global([data-theme="light"]) .editor-wrapper:hover :global(.cm-scroller::-webkit-scrollbar-thumb:hover) {
     background: rgba(0, 0, 0, 0.4);
   }
 
-  :global([data-theme="light"]) .editor-wrapper.is-scrolling :global(.cm-scroller),
+  :global([data-theme="light"] .editor-wrapper.is-scrolling) :global(.cm-scroller),
   :global([data-theme="light"]) .editor-wrapper:hover :global(.cm-scroller) {
     scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
   }

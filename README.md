@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128.png" alt="AgentLoom Logo" width="128" height="128">
+  <img src="src-tauri/icons/readme-icon.png" alt="AgentLoom Logo" width="128" height="128">
 </p>
 
 <h1 align="center">AgentLoom</h1>
@@ -38,9 +38,10 @@ AgentLoom is a desktop app that lets you manage AI agent skills from a single lo
 
 - **Unified Management** — Create, edit, and organize all your skills in one place
 - **Multi-Target Sync** — One click to sync skills across all your AI tools
-- **Built-in Editor** — Markdown editor with syntax highlighting
-- **Validation** — Validates skills against the [agentskills.io](https://agentskills.io) specification
-- **Import** — Import existing skills from any target or folder
+- **Built-in Editor** — Full-featured markdown editor with syntax highlighting (CodeMirror 6)
+- **Validation** — Validates skills against the [agentskills.io](https://agentskills.io) specification with auto-fix
+- **Import** — Import existing skills from any target, folder, or via drag-and-drop
+- **Theme Support** — System, light, and dark themes with native macOS integration
 - **Cross-Platform** — Works on macOS, Windows, and Linux
 
 ## Supported Tools
@@ -128,9 +129,19 @@ See [Architecture Documentation](docs/ARCHITECTURE.md) for detailed technical in
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Backend | Rust |
+| Framework | Tauri v2 |
+| Frontend | Svelte 5 + TypeScript + Vite |
+| Editor | CodeMirror 6 |
+| Icons | Lucide |
+
 ## Credits
 
-Using beautiful icons from [Lucide](https://lucide.dev/).
+Built with [Tauri](https://tauri.app/), [Svelte](https://svelte.dev/), and [Lucide](https://lucide.dev/) icons.
 
 ## License
 
