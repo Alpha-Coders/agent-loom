@@ -488,7 +488,11 @@ mod tests {
 
         // The path should now be a symlink
         let link_path = target.skill_link_path("my-skill");
-        assert!(link_path.symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(link_path
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
 
     #[test]
