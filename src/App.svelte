@@ -9,7 +9,7 @@
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
   import TabBar, { type Tab } from './lib/TabBar.svelte';
-  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Sun, Moon, Monitor, Power, type Icon } from 'lucide-svelte';
+  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Power, type Icon } from 'lucide-svelte';
   import { OverlayScrollbarsComponent } from 'overlayscrollbars-svelte';
   import 'overlayscrollbars/overlayscrollbars.css';
 
@@ -755,7 +755,7 @@
   <!-- Pane 1: Sidebar -->
   <aside class="sidebar-pane">
     <!-- Section 1: App branding + Tabs -->
-    <TabBar {activeTab} onTabChange={(tab) => activeTab = tab} />
+    <TabBar {activeTab} onTabChange={(tab) => activeTab = tab} {themeMode} onThemeToggle={cycleTheme} />
 
     <!-- Section 2: Targets -->
     <div class="targets-section">
@@ -806,20 +806,6 @@
         </div>
       </OverlayScrollbarsComponent>
 
-      <div class="targets-toolbar">
-        <button class="theme-toggle" onclick={cycleTheme} title="Color scheme">
-          {#if themeMode === 'system'}
-            <Monitor class="icon" size={14} strokeWidth={1.5} />
-            <span>System</span>
-          {:else if themeMode === 'light'}
-            <Sun class="icon" size={14} strokeWidth={1.5} />
-            <span>Light</span>
-          {:else}
-            <Moon class="icon" size={14} strokeWidth={1.5} />
-            <span>Dark</span>
-          {/if}
-        </button>
-      </div>
     </div>
 
     <div class="sidebar-footer">
@@ -1523,39 +1509,6 @@
     border-top: 1px solid var(--color-border);
     flex-shrink: 0;
     transition: border-color var(--theme-transition);
-  }
-
-  .theme-toggle {
-    height: 28px;
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 0 var(--space-2);
-    background: transparent;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    color: var(--color-text-muted);
-    font-size: var(--font-xs);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .theme-toggle:hover {
-    background: var(--color-surface);
-    border-color: var(--color-surface-hover);
-    color: var(--color-text);
-  }
-
-  .theme-toggle:active {
-    transform: scale(0.96);
-  }
-
-  .targets-toolbar {
-    height: var(--toolbar-height);
-    display: flex;
-    align-items: center;
-    padding: 0 var(--toolbar-padding-x);
-    flex-shrink: 0;
   }
 
   .sync-button {
