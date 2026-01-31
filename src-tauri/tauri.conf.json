@@ -16,11 +16,13 @@
         "title": "AgentLoom",
         "width": 1280,
         "height": 720,
-        "minWidth": 1240,
+        "minWidth": 1020,
         "minHeight": 500,
         "resizable": true,
         "fullscreen": false,
-        "center": true
+        "center": true,
+        "titleBarStyle": "transparent",
+        "hiddenTitle": true
       }
     ],
     "security": {
