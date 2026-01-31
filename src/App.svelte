@@ -807,27 +807,27 @@
       </OverlayScrollbarsComponent>
 
       <div class="targets-toolbar">
-        <button class="sync-button" onclick={handleSync} disabled={isSyncing}>
-          <span class="sync-icon" class:spinning={isSyncing}>
-            <RefreshCw class="icon" size={14} strokeWidth={2} />
-          </span>
-          {isSyncing ? 'Syncing...' : 'Sync'}
+        <button class="theme-toggle" onclick={cycleTheme} title="Color scheme">
+          {#if themeMode === 'system'}
+            <Monitor class="icon" size={14} strokeWidth={1.5} />
+            <span>System</span>
+          {:else if themeMode === 'light'}
+            <Sun class="icon" size={14} strokeWidth={1.5} />
+            <span>Light</span>
+          {:else}
+            <Moon class="icon" size={14} strokeWidth={1.5} />
+            <span>Dark</span>
+          {/if}
         </button>
       </div>
     </div>
 
     <div class="sidebar-footer">
-      <button class="theme-toggle" onclick={cycleTheme} title="Color scheme">
-        {#if themeMode === 'system'}
-          <Monitor class="icon" size={14} strokeWidth={1.5} />
-          <span>System</span>
-        {:else if themeMode === 'light'}
-          <Sun class="icon" size={14} strokeWidth={1.5} />
-          <span>Light</span>
-        {:else}
-          <Moon class="icon" size={14} strokeWidth={1.5} />
-          <span>Dark</span>
-        {/if}
+      <button class="sync-button" onclick={handleSync} disabled={isSyncing}>
+        <span class="sync-icon" class:spinning={isSyncing}>
+          <RefreshCw class="icon" size={14} strokeWidth={2} />
+        </span>
+        {isSyncing ? 'Syncing...' : 'Sync'}
       </button>
     </div>
   </aside>
@@ -948,8 +948,8 @@
           {/if}
         </div>
         <div class="pane-actions">
-          <button class="pane-action primary" onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges} title="Save">
-            {isSaving ? '...' : 'Save'}
+          <button class="toolbar-button destructive" onclick={(e) => handleDeleteSkill(editingSkill!, e)} title="Delete skill">
+            <Trash2 class="icon" size={14} strokeWidth={1.5} />
           </button>
         </div>
       </div>
@@ -971,9 +971,8 @@
         <SkillEditor content={editorContent} onchange={handleEditorChange} />
       </div>
       <div class="editor-toolbar">
-        <button class="toolbar-button destructive" onclick={(e) => handleDeleteSkill(editingSkill!, e)} title="Delete skill">
-          <Trash2 class="icon" size={14} strokeWidth={1.5} />
-          <span>Delete</span>
+        <button class="pane-action primary" onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges} title="Save">
+          {isSaving ? '...' : 'Save'}
         </button>
       </div>
     {:else if showNewSkillForm}
@@ -1158,9 +1157,10 @@
     --color-text-muted: rgba(255, 255, 255, 0.55);
     --color-text-dim: rgba(255, 255, 255, 0.35);
 
-    --color-primary: #0a84ff;
-    --color-primary-hover: #409cff;
-    --color-primary-muted: rgba(10, 132, 255, 0.18);
+    --color-primary: #FFD700;
+    --color-primary-hover: #FFDF40;
+    --color-primary-muted: rgba(255, 215, 0, 0.18);
+    --color-primary-text: #1a1a1a;
 
     --color-success: #30d158;
     --color-warning: #ff9f0a;
@@ -1182,9 +1182,10 @@
     --color-text-muted: rgba(0, 0, 0, 0.55);
     --color-text-dim: rgba(0, 0, 0, 0.35);
 
-    --color-primary: #007aff;
-    --color-primary-hover: #0051a8;
-    --color-primary-muted: rgba(0, 122, 255, 0.12);
+    --color-primary: #EAAA00;
+    --color-primary-hover: #D49800;
+    --color-primary-muted: rgba(234, 170, 0, 0.15);
+    --color-primary-text: #1a1a1a;
 
     --color-success: #34c759;
     --color-warning: #ff9500;
@@ -1344,7 +1345,7 @@
 
   .pane-action.primary {
     background: var(--color-primary);
-    color: white;
+    color: var(--color-primary-text);
     width: auto;
     height: 28px;
     padding: 0 var(--space-3);
@@ -1357,11 +1358,13 @@
 
   .pane-action.primary:hover:not(:disabled) {
     background: var(--color-primary-hover);
-    box-shadow: 0 2px 12px rgba(10, 132, 255, 0.4);
+    color: var(--color-primary-text);
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.25);
   }
 
   .pane-action.primary:active:not(:disabled) {
-    box-shadow: 0 1px 6px rgba(10, 132, 255, 0.3);
+    color: var(--color-primary-text);
+    box-shadow: 0 1px 4px rgba(255, 215, 0, 0.2);
   }
 
   /* ============================================
@@ -1564,7 +1567,7 @@
     width: 100%;
     padding: 0 var(--space-3);
     background: var(--color-primary);
-    color: white;
+    color: var(--color-primary-text);
     border: none;
     border-radius: var(--radius-md);
     font-size: var(--font-xs);
@@ -1575,12 +1578,14 @@
 
   .sync-button:hover:not(:disabled) {
     background: var(--color-primary-hover);
-    box-shadow: 0 4px 16px rgba(10, 132, 255, 0.4);
+    color: var(--color-primary-text);
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.25);
   }
 
   .sync-button:active:not(:disabled) {
     transform: scale(0.97);
-    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+    color: var(--color-primary-text);
+    box-shadow: 0 1px 4px rgba(255, 215, 0, 0.2);
   }
 
   .sync-button:disabled {
@@ -1693,11 +1698,18 @@
   .toolbar-button.primary {
     background: var(--color-primary);
     border: none;
-    color: white;
+    color: var(--color-primary-text);
   }
 
   .toolbar-button.primary:hover {
     background: var(--color-primary-hover);
+    color: var(--color-primary-text);
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.25);
+  }
+
+  .toolbar-button.primary:active {
+    color: var(--color-primary-text);
+    box-shadow: 0 1px 4px rgba(255, 215, 0, 0.2);
   }
 
   /* ============================================
@@ -2306,7 +2318,7 @@
   .drop-zone-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(10, 132, 255, 0.12);
+    background: rgba(255, 215, 0, 0.12);
     border: 3px dashed var(--color-primary);
     display: flex;
     align-items: center;
