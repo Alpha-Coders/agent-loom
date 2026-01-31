@@ -8,7 +8,7 @@
     "style" : "radial",
     "vignette" : 0
   },
-  "generatedAt" : "2026-01-30T10:54:00Z",
+  "generatedAt" : "2026-01-31T01:56:30Z",
   "mode" : "tauri",
   "options" : {
     "autoAlign" : true,
@@ -18,7 +18,6 @@
     "designChecks" : true,
     "fillFallback" : true,
     "fillFallbackMaxSize" : 32,
-    "includeTrayIcon" : false,
     "minStrokeWidth" : 1,
     "opticalSizing" : true,
     "preview" : false,
@@ -27,7 +26,7 @@
     "visionOSLayered" : false
   },
   "platform" : "macos",
-  "symbol" : "square.stack.3d.up",
+  "symbol" : "puzzle",
   "symbolConfig" : {
     "colors" : [
       "FFFFFF"
