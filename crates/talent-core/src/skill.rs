@@ -155,7 +155,8 @@ pub fn normalize_frontmatter(yaml_content: &str, folder_name: &str) -> Normalize
     let map = match value.as_mapping_mut() {
         Some(m) => m,
         None => {
-            fixes.push("YAML root was not a mapping, replaced with minimal frontmatter".to_string());
+            fixes
+                .push("YAML root was not a mapping, replaced with minimal frontmatter".to_string());
             return NormalizeResult {
                 yaml: format!(
                     "name: {}\ndescription: Skill imported with invalid frontmatter",
@@ -177,12 +178,18 @@ pub fn normalize_frontmatter(yaml_content: &str, folder_name: &str) -> Normalize
     match current_name {
         Some(name) if !is_valid_skill_name(&name) => {
             let fixed_name = to_kebab_case(&name);
-            fixes.push(format!("Converted name '{}' to kebab-case '{}'", name, fixed_name));
+            fixes.push(format!(
+                "Converted name '{}' to kebab-case '{}'",
+                name, fixed_name
+            ));
             map.insert(name_key.clone(), serde_yaml::Value::String(fixed_name));
         }
         None => {
             fixes.push(format!("Added missing name field: '{}'", folder_name));
-            map.insert(name_key.clone(), serde_yaml::Value::String(folder_name.to_string()));
+            map.insert(
+                name_key.clone(),
+                serde_yaml::Value::String(folder_name.to_string()),
+            );
         }
         _ => {}
     }
@@ -296,11 +303,14 @@ pub struct SkillMeta {
 
     /// Pre-approved tools the skill may use (experimental, space-delimited)
     /// Example: "Bash(git:*) Bash(jq:*) Read"
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "allowed-tools")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "allowed-tools"
+    )]
     pub allowed_tools: Option<String>,
 
     // --- Legacy fields (not in spec, kept for backward compatibility) ---
-
     /// Optional list of tags for categorization (legacy, not in spec)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
@@ -502,10 +512,12 @@ impl Skill {
 
         // Find the closing ---
         let after_first = &trimmed[3..];
-        let end_idx = after_first.find("\n---").ok_or_else(|| Error::InvalidFrontmatter {
-            path: path.to_path_buf(),
-            message: "Could not find closing frontmatter delimiter (---)".to_string(),
-        })?;
+        let end_idx = after_first
+            .find("\n---")
+            .ok_or_else(|| Error::InvalidFrontmatter {
+                path: path.to_path_buf(),
+                message: "Could not find closing frontmatter delimiter (---)".to_string(),
+            })?;
 
         let yaml_content = &after_first[..end_idx].trim();
         let content = after_first[end_idx + 4..].trim().to_string();
@@ -973,7 +985,10 @@ metadata:
         // Verify the normalized YAML can be parsed
         let meta: SkillMeta = serde_yaml::from_str(&result.yaml).unwrap();
         assert_eq!(meta.name, "test-skill");
-        assert_eq!(meta.metadata.get("triggers"), Some(&"item1, item2".to_string()));
+        assert_eq!(
+            meta.metadata.get("triggers"),
+            Some(&"item1, item2".to_string())
+        );
     }
 
     #[test]
@@ -984,7 +999,10 @@ metadata:
 
         assert!(result.was_modified);
         assert!(result.fixes.iter().any(|f| f.contains("missing name")));
-        assert!(result.fixes.iter().any(|f| f.contains("missing description")));
+        assert!(result
+            .fixes
+            .iter()
+            .any(|f| f.contains("missing description")));
 
         let meta: SkillMeta = serde_yaml::from_str(&result.yaml).unwrap();
         assert_eq!(meta.name, "my-skill");
@@ -1047,6 +1065,9 @@ Body here.
 
         // Reload and verify it's now valid
         let reloaded = Skill::load(&skill_dir).unwrap();
-        assert_eq!(reloaded.meta.metadata.get("triggers"), Some(&"item1, item2".to_string()));
+        assert_eq!(
+            reloaded.meta.metadata.get("triggers"),
+            Some(&"item1, item2".to_string())
+        );
     }
 }

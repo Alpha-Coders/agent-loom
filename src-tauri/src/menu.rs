@@ -82,7 +82,10 @@ pub fn create_menu(app: &AppHandle) -> Result<Menu<Wry>, tauri::Error> {
     file_menu.append(&refresh)?;
 
     file_menu.append(&PredefinedMenuItem::separator(app)?)?;
-    file_menu.append(&PredefinedMenuItem::close_window(app, Some("Close Window"))?)?;
+    file_menu.append(&PredefinedMenuItem::close_window(
+        app,
+        Some("Close Window"),
+    )?)?;
 
     menu.append(&file_menu)?;
 

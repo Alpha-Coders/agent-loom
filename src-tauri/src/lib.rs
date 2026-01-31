@@ -6,10 +6,10 @@
 mod commands;
 mod menu;
 
+use agentloom_core::{ConflictResolution, SkillManager, ValidationStatus};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use agentloom_core::{ConflictResolution, SkillManager, ValidationStatus};
 
 /// Skill information for the frontend
 /// See https://agentskills.io/specification for field definitions
@@ -90,7 +90,10 @@ impl From<&agentloom_core::DiscoveredSkill> for DiscoveredSkillInfo {
             source_path: skill.source_path.display().to_string(),
             source_target: skill.source_target.display_name().to_string(),
             has_conflict: skill.conflict.is_some(),
-            existing_description: skill.conflict.as_ref().map(|c| c.existing_description.clone()),
+            existing_description: skill
+                .conflict
+                .as_ref()
+                .map(|c| c.existing_description.clone()),
         }
     }
 }
@@ -138,7 +141,10 @@ impl From<&agentloom_core::ScannedSkill> for ScannedSkillInfo {
             needs_fixes: skill.needs_fixes,
             fixes_preview: skill.fixes_preview.clone(),
             has_conflict: skill.conflict.is_some(),
-            existing_description: skill.conflict.as_ref().map(|c| c.existing_description.clone()),
+            existing_description: skill
+                .conflict
+                .as_ref()
+                .map(|c| c.existing_description.clone()),
         }
     }
 }

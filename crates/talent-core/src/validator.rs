@@ -116,10 +116,7 @@ impl Validator {
         }
 
         // Combine loading errors with validation errors
-        let all_errors: Vec<String> = loading_errors
-            .into_iter()
-            .chain(errors)
-            .collect();
+        let all_errors: Vec<String> = loading_errors.into_iter().chain(errors).collect();
 
         // Update skill status
         if all_errors.is_empty() {
@@ -154,7 +151,10 @@ fn is_kebab_case(s: &str) -> bool {
     if !chars.first().is_some_and(|c| c.is_ascii_lowercase()) {
         return false;
     }
-    if !chars.last().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+    if !chars
+        .last()
+        .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+    {
         return false;
     }
 
@@ -260,7 +260,10 @@ mod tests {
         let result = validator.validate(&mut skill);
         assert!(result.is_err());
         assert_eq!(skill.validation_status, ValidationStatus::Invalid);
-        assert!(skill.validation_errors.iter().any(|e| e.contains("name is required")));
+        assert!(skill
+            .validation_errors
+            .iter()
+            .any(|e| e.contains("name is required")));
     }
 
     #[test]
@@ -308,7 +311,10 @@ mod tests {
         // Uppercase
         let mut skill = create_test_skill("MySkill", "Desc", "Content");
         assert!(validator.validate(&mut skill).is_err());
-        assert!(skill.validation_errors.iter().any(|e| e.contains("kebab-case")));
+        assert!(skill
+            .validation_errors
+            .iter()
+            .any(|e| e.contains("kebab-case")));
 
         // Underscores
         let mut skill = create_test_skill("my_skill", "Desc", "Content");

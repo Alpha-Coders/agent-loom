@@ -1,11 +1,11 @@
 //! Tauri commands for the frontend
 
 use crate::{
-    AppState, DiscoveredSkillInfo, FolderImportSelectionInfo, ImportResultInfo, ImportSelectionInfo,
-    ScannedSkillInfo, SkillInfo, StatsInfo,
+    AppState, DiscoveredSkillInfo, FolderImportSelectionInfo, ImportResultInfo,
+    ImportSelectionInfo, ScannedSkillInfo, SkillInfo, StatsInfo,
 };
-use std::path::PathBuf;
 use agentloom_core::{check_filemerge_available, open_filemerge, Importer, SyncResult, TargetInfo};
+use std::path::PathBuf;
 
 /// Get all skills (sorted alphabetically by name)
 #[tauri::command]
@@ -22,12 +22,18 @@ pub fn get_targets(state: tauri::State<'_, AppState>) -> Result<Vec<TargetInfo>,
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
 
     // Get skill names for sync status check
-    let skill_names: Vec<String> = manager.skills().iter().map(|s| s.folder_name().to_string()).collect();
+    let skill_names: Vec<String> = manager
+        .skills()
+        .iter()
+        .map(|s| s.folder_name().to_string())
+        .collect();
     let skills_dir = manager.config().skills_dir.clone();
 
-    let mut targets: Vec<TargetInfo> = manager.targets().iter().map(|t| {
-        TargetInfo::from_target(t, Some(&skill_names), Some(&skills_dir))
-    }).collect();
+    let mut targets: Vec<TargetInfo> = manager
+        .targets()
+        .iter()
+        .map(|t| TargetInfo::from_target(t, Some(&skill_names), Some(&skills_dir)))
+        .collect();
     targets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(targets)
 }
@@ -57,7 +63,10 @@ pub fn create_skill(
 /// Always returns the skill info, even if validation fails.
 /// The validation status and errors are included in the returned SkillInfo.
 #[tauri::command]
-pub fn validate_skill(state: tauri::State<'_, AppState>, name: String) -> Result<SkillInfo, String> {
+pub fn validate_skill(
+    state: tauri::State<'_, AppState>,
+    name: String,
+) -> Result<SkillInfo, String> {
     let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
 
     // Run validation but ignore the result - we want to return the skill
@@ -99,9 +108,15 @@ pub fn delete_skill(state: tauri::State<'_, AppState>, name: String) -> Result<(
 
 /// Rename a skill
 #[tauri::command]
-pub fn rename_skill(state: tauri::State<'_, AppState>, old_name: String, new_name: String) -> Result<SkillInfo, String> {
+pub fn rename_skill(
+    state: tauri::State<'_, AppState>,
+    old_name: String,
+    new_name: String,
+) -> Result<SkillInfo, String> {
     let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
-    let skill = manager.rename_skill(&old_name, &new_name).map_err(|e| e.to_string())?;
+    let skill = manager
+        .rename_skill(&old_name, &new_name)
+        .map_err(|e| e.to_string())?;
     Ok(SkillInfo::from(skill))
 }
 
@@ -121,11 +136,12 @@ pub fn get_stats(state: tauri::State<'_, AppState>) -> Result<StatsInfo, String>
 
 /// Get the raw content of a skill's SKILL.md file
 #[tauri::command]
-pub fn get_skill_content(state: tauri::State<'_, AppState>, name: String) -> Result<String, String> {
+pub fn get_skill_content(
+    state: tauri::State<'_, AppState>,
+    name: String,
+) -> Result<String, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    manager
-        .get_skill_content(&name)
-        .map_err(|e| e.to_string())
+    manager.get_skill_content(&name).map_err(|e| e.to_string())
 }
 
 /// Save content to a skill's SKILL.md file
@@ -254,9 +270,7 @@ pub fn import_all_skills(state: tauri::State<'_, AppState>) -> Result<ImportResu
 #[tauri::command]
 pub fn toggle_target(state: tauri::State<'_, AppState>, target_id: String) -> Result<bool, String> {
     let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
-    manager
-        .toggle_target(&target_id)
-        .map_err(|e| e.to_string())
+    manager.toggle_target(&target_id).map_err(|e| e.to_string())
 }
 
 /// Set a target's enabled state
@@ -320,11 +334,17 @@ pub fn remove_custom_target(
 
 /// Get available target types that can be added
 #[tauri::command]
-pub fn get_available_target_types(state: tauri::State<'_, AppState>) -> Result<Vec<(String, String)>, String> {
+pub fn get_available_target_types(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<(String, String)>, String> {
     use agentloom_core::TargetKind;
 
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    let existing_ids: Vec<_> = manager.targets().iter().map(|t| t.id().to_string()).collect();
+    let existing_ids: Vec<_> = manager
+        .targets()
+        .iter()
+        .map(|t| t.id().to_string())
+        .collect();
 
     // Return target types that aren't already configured
     let available: Vec<_> = TargetKind::all()
@@ -374,7 +394,9 @@ pub fn fix_skill(state: tauri::State<'_, AppState>, name: String) -> Result<Skil
 
 /// Fix all skills with frontmatter issues
 #[tauri::command]
-pub fn fix_all_skills(state: tauri::State<'_, AppState>) -> Result<Vec<(String, Vec<String>)>, String> {
+pub fn fix_all_skills(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<(String, Vec<String>)>, String> {
     let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
 
     let results = manager.fix_all_skills();

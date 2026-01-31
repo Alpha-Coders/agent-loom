@@ -444,7 +444,9 @@ impl SkillManager {
         }
 
         // Return reference to renamed skill - find by folder_name which is now new_name
-        self.skills.iter().find(|s| s.folder_name() == new_name)
+        self.skills
+            .iter()
+            .find(|s| s.folder_name() == new_name)
             .ok_or_else(|| Error::SkillNotFound(new_path))
     }
 
@@ -614,11 +616,13 @@ impl SkillManager {
     pub fn stats(&self) -> ManagerStats {
         ManagerStats {
             total_skills: self.skills.len(),
-            valid_skills: self.skills
+            valid_skills: self
+                .skills
                 .iter()
                 .filter(|s| s.validation_status == ValidationStatus::Valid)
                 .count(),
-            invalid_skills: self.skills
+            invalid_skills: self
+                .skills
                 .iter()
                 .filter(|s| s.validation_status == ValidationStatus::Invalid)
                 .count(),
@@ -694,7 +698,9 @@ mod tests {
         let config = create_test_config(&temp);
         let mut manager = SkillManager::with_config(config).unwrap();
 
-        manager.create_skill("doomed-skill", "Will be deleted").unwrap();
+        manager
+            .create_skill("doomed-skill", "Will be deleted")
+            .unwrap();
         assert_eq!(manager.skills().len(), 1);
 
         manager.delete_skill("doomed-skill").unwrap();
@@ -766,7 +772,9 @@ mod tests {
         let config = create_test_config(&temp);
         let mut manager = SkillManager::with_config(config.clone()).unwrap();
 
-        manager.create_skill("old-name", "A skill to rename").unwrap();
+        manager
+            .create_skill("old-name", "A skill to rename")
+            .unwrap();
         assert_eq!(manager.skills().len(), 1);
 
         // Rename the skill
@@ -789,7 +797,9 @@ mod tests {
         let config = create_test_config(&temp);
         let mut manager = SkillManager::with_config(config.clone()).unwrap();
 
-        manager.create_skill("original-skill", "Original description").unwrap();
+        manager
+            .create_skill("original-skill", "Original description")
+            .unwrap();
 
         // Edit content to change the name
         let new_content = r#"---
@@ -802,7 +812,9 @@ description: Updated description
 New content here.
 "#;
 
-        let result_name = manager.save_skill_content("original-skill", new_content).unwrap();
+        let result_name = manager
+            .save_skill_content("original-skill", new_content)
+            .unwrap();
         assert_eq!(result_name, "renamed-skill");
 
         // Folder should be renamed
