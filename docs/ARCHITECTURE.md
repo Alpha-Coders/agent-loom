@@ -12,14 +12,16 @@ AgentLoom is built with a Rust backend (Tauri v2) and a Svelte 5 frontend. It wo
 flowchart TB
     subgraph Frontend["Frontend (WebView)"]
         direction TB
-        Svelte["Svelte 5<br/>Reactive UI"]
-        TS["TypeScript"]
+        App["App.svelte<br/>State & Design Tokens"]
+        TabBar["TabBar.svelte<br/>Navigation & Theme"]
+        Editor["SkillEditor.svelte<br/>CodeMirror 6"]
+        Import["ImportFromFolderModal<br/>Drag & Drop"]
         Vite["Vite<br/>Dev Server & Bundler"]
-        CM["CodeMirror 6<br/>Markdown Editor"]
 
-        Svelte --> TS
-        Vite -.->|"HMR"| Svelte
-        CM -->|"Editor Component"| Svelte
+        App --> TabBar
+        App --> Editor
+        App --> Import
+        Vite -.->|"HMR"| App
     end
 
     subgraph Tauri["Tauri v2 Runtime"]
@@ -95,7 +97,7 @@ flowchart TB
     classDef storage fill:#95d5b2,stroke:#333,color:#000
     classDef targets fill:#a8dadc,stroke:#333,color:#000
 
-    class Svelte,TS,Vite,CM frontend
+    class App,TabBar,Editor,Import,Vite frontend
     class WebView,IPC,Menu,Window tauri
     class TauriApp,Commands,CoreLib,Manager,Validator,Syncer,Config,CLIApp rust
     class AppDir,SkillsDir,ConfigFile storage
@@ -128,14 +130,20 @@ agent-loom/
 │   └── talent-cli/               # CLI application (agentloom-cli)
 │       └── src/main.rs
 ├── src-tauri/                    # Tauri backend (agentloom)
+│   ├── tauri.conf.json           # Window & app configuration
 │   └── src/
 │       ├── main.rs
 │       ├── lib.rs
 │       └── commands.rs           # Tauri commands
 ├── src/                          # Svelte frontend
-│   ├── main.ts
-│   ├── App.svelte
+│   ├── main.ts                   # Entry point
+│   ├── App.svelte                # Main app + design tokens
 │   └── lib/
+│       ├── api.ts                # Tauri command wrappers
+│       ├── types.ts              # TypeScript interfaces
+│       ├── TabBar.svelte         # Navigation & theme toggle
+│       ├── SkillEditor.svelte    # Markdown editor
+│       └── ImportFromFolderModal.svelte
 └── package.json
 ```
 
@@ -147,7 +155,64 @@ agent-loom/
 | Framework | Tauri v2 |
 | Frontend | Svelte 5 + TypeScript + Vite |
 | Editor | CodeMirror 6 |
+| Icons | Lucide |
+| Scrollbars | OverlayScrollbars |
 | CLI | clap 4 |
+
+## Frontend Architecture
+
+### Components
+
+| Component | Purpose |
+|-----------|---------|
+| `App.svelte` | Main application shell, state management, design tokens |
+| `TabBar.svelte` | Navigation sidebar with app branding and theme toggle |
+| `SkillEditor.svelte` | CodeMirror-based markdown editor with theme sync |
+| `ImportFromFolderModal.svelte` | Drag-and-drop folder import with skill scanning |
+
+### Design System
+
+The app uses CSS custom properties (design tokens) defined in `App.svelte`:
+
+```css
+/* Spacing */
+--space-1: 4px;
+--space-2: 8px;
+--space-3: 12px;
+--space-4: 16px;
+
+/* Colors (gold/amber theme) */
+--color-primary: #FFD700;
+--color-primary-hover: #FFDF40;
+--color-primary-muted: rgba(255, 215, 0, 0.18);
+--color-primary-text: #1a1a1a;
+
+/* Typography */
+--font-sm: 13px;
+--font-base: 14px;
+```
+
+### Theme Support
+
+Three theme modes are supported:
+- **System** — Follows OS preference (default)
+- **Light** — Light color scheme
+- **Dark** — Dark color scheme
+
+Theme state is persisted to `localStorage` and applied via `data-theme` attribute on `<html>`.
+
+### Window Configuration
+
+The app uses Tauri's transparent title bar with hidden title for a native macOS look:
+
+```json
+{
+  "titleBarStyle": "Transparent",
+  "hiddenTitle": true
+}
+```
+
+This preserves native window controls (traffic lights) while allowing custom header styling.
 
 ## Storage Layout
 

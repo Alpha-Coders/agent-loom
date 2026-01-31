@@ -1052,18 +1052,22 @@
   <div class="context-menu-backdrop" onclick={hideContextMenu} oncontextmenu={(e) => { e.preventDefault(); hideContextMenu(); }}></div>
   <div
     class="context-menu"
+    role="menu"
+    tabindex="-1"
     style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
     oncontextmenu={(e) => e.preventDefault()}
   >
     {#each contextMenu.items as item}
+      {@const Icon = item.icon}
       <button
         class="context-menu-item"
         class:destructive={item.destructive}
         disabled={item.disabled}
         onclick={() => { item.action(); hideContextMenu(); }}
+        role="menuitem"
       >
-        {#if item.icon}
-          <svelte:component this={item.icon} class="context-menu-icon" size={14} strokeWidth={1.5} />
+        {#if Icon}
+          <Icon class="context-menu-icon" size={14} strokeWidth={1.5} />
         {/if}
         <span>{item.label}</span>
       </button>

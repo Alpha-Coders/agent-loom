@@ -47,8 +47,13 @@ agent-loom/
 │       └── commands.rs           # Tauri IPC commands
 ├── src/                          # Svelte frontend
 │   ├── main.ts                   # Entry point
-│   ├── App.svelte                # Root component
-│   └── app.css                   # Global styles
+│   ├── App.svelte                # Root component + design tokens
+│   └── lib/
+│       ├── api.ts                # Tauri command wrappers
+│       ├── types.ts              # TypeScript interfaces
+│       ├── TabBar.svelte         # Navigation + theme toggle
+│       ├── SkillEditor.svelte    # CodeMirror markdown editor
+│       └── ImportFromFolderModal.svelte
 ├── package.json                  # Frontend dependencies
 └── vite.config.ts                # Vite configuration
 ```
@@ -58,6 +63,9 @@ agent-loom/
 - **Backend**: Rust 2021 edition
 - **Framework**: Tauri v2
 - **Frontend**: Svelte 5 + TypeScript + Vite
+- **Editor**: CodeMirror 6
+- **Icons**: Lucide
+- **Scrollbars**: OverlayScrollbars
 - **CLI**: clap 4
 - **File Watching**: notify crate
 - **Serialization**: serde, serde_json, serde_yaml, toml
@@ -210,8 +218,9 @@ const result = await invoke<string>("my_command", { arg: "value" });
 
 ### Add a Svelte Component
 
-1. Create `src/components/MyComponent.svelte`
-2. Import in parent: `import MyComponent from "./components/MyComponent.svelte"`
+1. Create `src/lib/MyComponent.svelte`
+2. Import in parent: `import MyComponent from './lib/MyComponent.svelte'`
+3. Use design tokens from `App.svelte` (e.g., `var(--color-primary)`, `var(--space-2)`)
 
 ## Troubleshooting
 
