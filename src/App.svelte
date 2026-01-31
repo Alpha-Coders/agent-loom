@@ -1115,7 +1115,7 @@
     --space-8: 32px;
 
     /* macOS traffic light area */
-    --titlebar-height: 52px;
+    --titlebar-height: 48px;
 
     /* Toolbar dimensions */
     --toolbar-height: 48px;
@@ -1140,7 +1140,7 @@
     /* Layout - 3 Pane */
     --targets-pane-width: 180px;
     --skills-pane-width: 280px;
-    --editor-min-width: 720px;
+    --editor-min-width: 560px;
   }
 
   /* ============================================
@@ -1287,7 +1287,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 20px var(--toolbar-padding-x) 0; /* Top padding for traffic lights */
+    padding: 0 var(--toolbar-padding-x);
     border-bottom: 1px solid var(--color-border);
     -webkit-app-region: drag;
     flex-shrink: 0;

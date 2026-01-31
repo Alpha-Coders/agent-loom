@@ -40,7 +40,7 @@
     height: var(--titlebar-height);
     display: flex;
     align-items: center;
-    padding: 20px var(--toolbar-padding-x) 0;
+    padding: 0 var(--toolbar-padding-x);
     border-bottom: 1px solid var(--color-border);
     -webkit-app-region: drag;
     transition: border-color var(--theme-transition);
