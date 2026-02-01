@@ -465,15 +465,41 @@ pub fn import_from_folder(
     })
 }
 
-// === Finder Integration ===
+// === File Manager Integration ===
 
-/// Reveal a path in Finder
+/// Reveal a path in the system file manager (Finder on macOS, Explorer on Windows)
 #[tauri::command]
 pub fn reveal_in_finder(path: String) -> Result<(), String> {
-    std::process::Command::new("open")
-        .arg("-R")
-        .arg(&path)
-        .spawn()
-        .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to reveal in Explorer: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Linux doesn't have a universal "select file" command, open parent directory
+        let parent = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or(path);
+        std::process::Command::new("xdg-open")
+            .arg(&parent)
+            .spawn()
+            .map_err(|e| format!("Failed to open file manager: {}", e))?;
+    }
+
     Ok(())
 }

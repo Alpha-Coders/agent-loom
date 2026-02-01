@@ -34,6 +34,10 @@
     localStorage.setItem('theme', themeMode);
   }
 
+  // Platform detection for UI labels
+  const isMac = navigator.platform.toLowerCase().includes('mac');
+  const revealLabel = isMac ? 'Reveal in Finder' : 'Show in Explorer';
+
   // State using Svelte 5 runes
   let skills = $state<SkillInfo[]>([]);
   let targets = $state<TargetInfo[]>([]);
@@ -566,7 +570,7 @@
         action: () => handleEditSkill(skill),
       },
       {
-        label: 'Reveal in Finder',
+        label: revealLabel,
         icon: FolderOpen,
         action: async () => {
           try {
@@ -594,7 +598,7 @@
         action: () => handleToggleTarget(target.id),
       },
       {
-        label: 'Reveal in Finder',
+        label: revealLabel,
         icon: FolderOpen,
         action: async () => {
           try {
@@ -648,9 +652,35 @@
                     target instanceof HTMLTextAreaElement ||
                     (target instanceof HTMLElement && target.closest('.cm-editor'));
 
-    // Let ALL Cmd/Ctrl+key combos pass through to native menu handlers
-    // (Cmd+S, Cmd+W, Cmd+N, Cmd+R, Cmd+Q, Cmd+H, Cmd+M, Cmd+Z, Cmd+C, Cmd+V, etc.)
+    // Handle Cmd/Ctrl+key shortcuts directly (Windows fallback for native menu accelerators)
     if (event.metaKey || event.ctrlKey) {
+      // Ctrl+N / Cmd+N - New Skill
+      if (event.key === 'n' || event.key === 'N') {
+        if (!event.shiftKey) {
+          event.preventDefault();
+          handleShowNewSkillForm();
+          return;
+        }
+      }
+      // Ctrl+S / Cmd+S - Save (without Shift)
+      if ((event.key === 's' || event.key === 'S') && !event.shiftKey) {
+        event.preventDefault();
+        handleMenuSave();
+        return;
+      }
+      // Ctrl+Shift+S / Cmd+Shift+S - Sync All
+      if ((event.key === 's' || event.key === 'S') && event.shiftKey) {
+        event.preventDefault();
+        handleSync();
+        return;
+      }
+      // Ctrl+R / Cmd+R - Refresh
+      if (event.key === 'r' || event.key === 'R') {
+        event.preventDefault();
+        handleRefresh();
+        return;
+      }
+      // Let other Cmd/Ctrl combos pass through (copy, paste, undo, etc.)
       return;
     }
 
