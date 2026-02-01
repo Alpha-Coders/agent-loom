@@ -93,21 +93,52 @@ impl TargetKind {
         }
     }
 
-    /// Get the config directory name (relative to home)
-    fn config_dir_name(&self) -> &'static str {
-        match self {
-            TargetKind::ClaudeCode => ".claude",
-            TargetKind::Codex => ".codex",
-            TargetKind::Gemini => ".gemini",
-            TargetKind::Cursor => ".cursor",
-            TargetKind::Amp => ".amp",
-            TargetKind::Goose => ".goose",
-            TargetKind::RooCode => ".roo-code",
-            TargetKind::OpenCode => ".opencode",
-            TargetKind::Vibe => ".vibe",
-            TargetKind::Firebender => ".firebender",
-            TargetKind::Mux => ".mux",
-            TargetKind::Autohand => ".autohand",
+    /// Get the config directory path for this target
+    ///
+    /// On Windows, some tools use %APPDATA% or %LOCALAPPDATA% instead of home directory.
+    /// On Unix, all tools use ~/.toolname convention.
+    fn config_dir(&self) -> Option<PathBuf> {
+        #[cfg(windows)]
+        {
+            match self {
+                // Tools that use %LOCALAPPDATA% on Windows
+                TargetKind::Codex => dirs::data_local_dir().map(|p| p.join("Codex")),
+
+                // Tools that use %APPDATA% on Windows
+                TargetKind::Cursor => dirs::config_dir().map(|p| p.join("Cursor")),
+
+                // Tools that use home directory on Windows (Unix-style)
+                TargetKind::ClaudeCode => dirs::home_dir().map(|p| p.join(".claude")),
+                TargetKind::Gemini => dirs::home_dir().map(|p| p.join(".gemini")),
+                TargetKind::Amp => dirs::home_dir().map(|p| p.join(".amp")),
+                TargetKind::Goose => dirs::home_dir().map(|p| p.join(".goose")),
+                TargetKind::RooCode => dirs::home_dir().map(|p| p.join(".roo-code")),
+                TargetKind::OpenCode => dirs::home_dir().map(|p| p.join(".opencode")),
+                TargetKind::Vibe => dirs::home_dir().map(|p| p.join(".vibe")),
+                TargetKind::Firebender => dirs::home_dir().map(|p| p.join(".firebender")),
+                TargetKind::Mux => dirs::home_dir().map(|p| p.join(".mux")),
+                TargetKind::Autohand => dirs::home_dir().map(|p| p.join(".autohand")),
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            // On Unix, all tools use ~/.toolname convention
+            let dir_name = match self {
+                TargetKind::ClaudeCode => ".claude",
+                TargetKind::Codex => ".codex",
+                TargetKind::Gemini => ".gemini",
+                TargetKind::Cursor => ".cursor",
+                TargetKind::Amp => ".amp",
+                TargetKind::Goose => ".goose",
+                TargetKind::RooCode => ".roo-code",
+                TargetKind::OpenCode => ".opencode",
+                TargetKind::Vibe => ".vibe",
+                TargetKind::Firebender => ".firebender",
+                TargetKind::Mux => ".mux",
+                TargetKind::Autohand => ".autohand",
+            };
+            dirs::home_dir().map(|p| p.join(dir_name))
         }
     }
 
@@ -171,8 +202,7 @@ impl Target {
 
     /// Try to auto-detect a target by checking for its config directory
     pub fn detect(kind: TargetKind) -> Option<Self> {
-        let home = dirs::home_dir()?;
-        let config_dir = home.join(kind.config_dir_name());
+        let config_dir = kind.config_dir()?;
 
         if config_dir.exists() {
             let skills_path = config_dir.join(kind.skills_subdir());

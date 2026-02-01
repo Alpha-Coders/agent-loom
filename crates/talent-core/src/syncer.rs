@@ -183,25 +183,27 @@ impl Syncer {
     ) -> Result<SymlinkAction> {
         // Check if something already exists at the link path
         if link_path.exists() || link_path.symlink_metadata().is_ok() {
-            // Check if it's already a symlink
+            // Check if it's already a symlink or junction
             let metadata = link_path
                 .symlink_metadata()
                 .map_err(|e| Error::io(link_path, e))?;
 
-            if metadata.file_type().is_symlink() {
+            if self.is_link(&metadata, link_path) {
                 // Check if it points to the correct target
-                let current_target =
-                    fs::read_link(link_path).map_err(|e| Error::io(link_path, e))?;
+                let current_target = self
+                    .read_link_target(link_path)
+                    .map_err(|e| Error::io(link_path, e))?;
 
                 if current_target == target_path {
                     return Ok(SymlinkAction::Unchanged);
                 }
 
                 // Points to wrong target, remove and recreate
-                fs::remove_file(link_path).map_err(|e| Error::SymlinkRemove {
-                    path: link_path.to_path_buf(),
-                    message: e.to_string(),
-                })?;
+                self.remove_link(link_path)
+                    .map_err(|e| Error::SymlinkRemove {
+                        path: link_path.to_path_buf(),
+                        message: e.to_string(),
+                    })?;
             } else if auto_migrate {
                 // Not a symlink, but auto_migrate is enabled
                 // Remove the existing folder/file since the skill exists in Talent
@@ -232,6 +234,9 @@ impl Syncer {
     }
 
     /// Actually create the symlink (platform-specific)
+    ///
+    /// On Unix, creates a symbolic link.
+    /// On Windows, creates a directory junction (no admin privileges required).
     fn do_create_symlink(&self, link_path: &Path, target_path: &Path) -> Result<()> {
         #[cfg(unix)]
         std::os::unix::fs::symlink(target_path, link_path).map_err(|e| Error::SymlinkCreate {
@@ -242,23 +247,108 @@ impl Syncer {
 
         #[cfg(windows)]
         {
-            // On Windows, use directory junctions for directories
+            // On Windows, use NTFS directory junctions instead of symlinks.
+            // Junctions don't require SeCreateSymbolicLinkPrivilege (admin/Developer Mode).
+            // Note: Junctions only work for directories and require absolute paths.
             if target_path.is_dir() {
-                std::os::windows::fs::symlink_dir(target_path, link_path)
+                // Convert to absolute paths as junctions require them
+                let abs_target = if target_path.is_absolute() {
+                    target_path.to_path_buf()
+                } else {
+                    std::env::current_dir()
+                        .map_err(|e| Error::SymlinkCreate {
+                            link_source: target_path.to_path_buf(),
+                            link_target: link_path.to_path_buf(),
+                            message: format!("Failed to get current directory: {e}"),
+                        })?
+                        .join(target_path)
+                };
+
+                junction::create(&abs_target, link_path).map_err(|e| Error::SymlinkCreate {
+                    link_source: target_path.to_path_buf(),
+                    link_target: link_path.to_path_buf(),
+                    message: e.to_string(),
+                })?;
             } else {
-                std::os::windows::fs::symlink_file(target_path, link_path)
+                // For files, fall back to copy since junctions only work for directories
+                // and symlinks require elevated privileges
+                std::fs::copy(target_path, link_path).map_err(|e| Error::SymlinkCreate {
+                    link_source: target_path.to_path_buf(),
+                    link_target: link_path.to_path_buf(),
+                    message: format!("Failed to copy file (symlinks require admin): {e}"),
+                })?;
             }
-            .map_err(|e| Error::SymlinkCreate {
-                link_source: target_path.to_path_buf(),
-                link_target: link_path.to_path_buf(),
-                message: e.to_string(),
-            })?;
         }
 
         Ok(())
     }
 
-    /// Remove symlinks for skills that no longer exist
+    /// Check if a path is a symlink or junction (platform-specific)
+    #[cfg(unix)]
+    fn is_link(&self, metadata: &std::fs::Metadata, _path: &Path) -> bool {
+        metadata.file_type().is_symlink()
+    }
+
+    #[cfg(windows)]
+    fn is_link(&self, metadata: &std::fs::Metadata, path: &Path) -> bool {
+        // On Windows, is_symlink() returns true for both symlinks and junctions
+        // Also check junction::exists for junctions not detected as symlinks
+        metadata.file_type().is_symlink() || junction::exists(path).unwrap_or(false)
+    }
+
+    /// Read the target of a symlink or junction (platform-specific)
+    #[cfg(unix)]
+    fn read_link_target(&self, path: &Path) -> std::io::Result<std::path::PathBuf> {
+        fs::read_link(path)
+    }
+
+    #[cfg(windows)]
+    fn read_link_target(&self, path: &Path) -> std::io::Result<std::path::PathBuf> {
+        // Try junction first, then symlink
+        if junction::exists(path).unwrap_or(false) {
+            junction::get_target(path)
+        } else {
+            fs::read_link(path)
+        }
+    }
+
+    /// Remove a symlink or junction (platform-specific)
+    #[cfg(unix)]
+    fn remove_link(&self, path: &Path) -> std::io::Result<()> {
+        fs::remove_file(path)
+    }
+
+    #[cfg(windows)]
+    fn remove_link(&self, path: &Path) -> std::io::Result<()> {
+        // On Windows, junctions are created by junction::create and can be removed
+        // with fs::remove_dir. Try multiple strategies for robustness.
+
+        // Strategy 1: remove_dir (works for junctions)
+        if fs::remove_dir(path).is_ok() && !path.exists() {
+            return Ok(());
+        }
+
+        // Strategy 2: remove_file (works for symlinks to directories)
+        if fs::remove_file(path).is_ok() && !path.exists() {
+            return Ok(());
+        }
+
+        // Strategy 3: junction::delete as fallback
+        if junction::delete(path).is_ok() && !path.exists() {
+            return Ok(());
+        }
+
+        // If path still exists, report error
+        if path.exists() {
+            return Err(std::io::Error::other(
+                "Failed to remove link - path still exists after removal attempts",
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Remove symlinks/junctions for skills that no longer exist
     fn remove_stale_symlinks(
         &self,
         target: &Target,
@@ -271,13 +361,13 @@ impl Syncer {
         for entry in entries.filter_map(|e| e.ok()) {
             let path = entry.path();
 
-            // Only process symlinks
+            // Only process symlinks/junctions
             let metadata = match path.symlink_metadata() {
                 Ok(m) => m,
                 Err(_) => continue,
             };
 
-            if !metadata.file_type().is_symlink() {
+            if !self.is_link(&metadata, &path) {
                 continue;
             }
 
@@ -289,7 +379,7 @@ impl Syncer {
 
             // If this skill is not in our current set, remove the symlink
             if !current_skills.contains(skill_name) {
-                match fs::remove_file(&path) {
+                match self.remove_link(&path) {
                     Ok(()) => {
                         result.removed.push(skill_name.to_string());
                     }
@@ -306,7 +396,7 @@ impl Syncer {
         Ok(())
     }
 
-    /// Remove all symlinks for a target (used when disabling a target)
+    /// Remove all symlinks/junctions for a target (used when disabling a target)
     pub fn remove_all_symlinks(&self, target: &Target) -> Result<Vec<String>> {
         if !target.skills_path.exists() {
             return Ok(Vec::new());
@@ -320,13 +410,13 @@ impl Syncer {
         for entry in entries.filter_map(|e| e.ok()) {
             let path = entry.path();
 
-            // Only process symlinks
+            // Only process symlinks/junctions
             let metadata = match path.symlink_metadata() {
                 Ok(m) => m,
                 Err(_) => continue,
             };
 
-            if !metadata.file_type().is_symlink() {
+            if !self.is_link(&metadata, &path) {
                 continue;
             }
 
@@ -336,7 +426,7 @@ impl Syncer {
                 .unwrap_or_default()
                 .to_string();
 
-            fs::remove_file(&path).map_err(|e| Error::SymlinkRemove {
+            self.remove_link(&path).map_err(|e| Error::SymlinkRemove {
                 path: path.clone(),
                 message: e.to_string(),
             })?;
