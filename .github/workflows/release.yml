@@ -1,5 +1,21 @@
 name: Release
 
+# macOS Code Signing (Optional)
+# -----------------------------
+# For unsigned builds, users must run `xattr -cr /Applications/AgentLoom.app` before first launch.
+# To enable automatic code signing and notarization, set these repository secrets:
+#
+#   APPLE_CERTIFICATE          - Base64-encoded .p12 certificate (Developer ID Application)
+#   APPLE_CERTIFICATE_PASSWORD - Password for the .p12 certificate
+#   KEYCHAIN_PASSWORD          - Temporary keychain password (any secure value)
+#   APPLE_SIGNING_IDENTITY     - Certificate name, e.g., "Developer ID Application: Your Name (TEAMID)"
+#   APPLE_ID                   - Your Apple ID email (for notarization)
+#   APPLE_PASSWORD             - App-specific password from appleid.apple.com
+#   APPLE_TEAM_ID              - Your 10-character Team ID
+#
+# To export your certificate as base64:
+#   base64 -i certificate.p12 | pbcopy
+
 on:
   push:
     tags:
@@ -135,11 +151,37 @@ jobs:
             echo "version=$(node -p "require('./package.json').version")-dev" >> $GITHUB_OUTPUT
           fi
 
+      - name: Import Apple signing certificate
+        if: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE != '' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Create a temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Allow codesign to access the key
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
       - name: Build (macOS)
         if: matrix.platform == 'macos-latest'
         env:
           TARGET: ${{ matrix.target }}
-        run: npm run tauri build -- --target "$TARGET" --bundles app
+          # Tauri signing environment variables (only used if secrets exist)
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run tauri build -- --target "$TARGET" --bundles dmg
 
       - name: Build (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -154,6 +196,14 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: npm run tauri build -- --target "$TARGET" --bundles nsis
 
+      - name: Cleanup Apple keychain
+        if: matrix.platform == 'macos-latest' && always()
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+
       - name: Package macOS artifact
         if: matrix.platform == 'macos-latest'
         env:
@@ -161,19 +211,18 @@ jobs:
           ARCH: ${{ matrix.arch }}
           TARGET: ${{ matrix.target }}
         run: |
-          # Tauri builds to workspace root target/, not src-tauri/target/
-          APP_PATH=$(find target -name "AgentLoom.app" -type d 2>/dev/null | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "Error: Could not find AgentLoom.app"
-            find target -type d -name "bundle" -exec ls -la {} \; 2>/dev/null || true
+          # Tauri builds DMG to workspace root target/
+          DMG_PATH=$(find target -name "*.dmg" -path "*/$TARGET/release/bundle/dmg/*" 2>/dev/null | head -1)
+          if [ -z "$DMG_PATH" ]; then
+            echo "Error: Could not find DMG file"
+            find target -type d -name "bundle" -exec ls -laR {} \; 2>/dev/null || true
             exit 1
           fi
-          echo "Found at: $APP_PATH"
+          echo "Found at: $DMG_PATH"
 
-          ZIP_NAME="AgentLoom-${VERSION}-macos-${ARCH}.zip"
-          cd "$(dirname "$APP_PATH")"
-          zip -r -q "${GITHUB_WORKSPACE}/${ZIP_NAME}" "AgentLoom.app"
-          echo "artifact_name=${ZIP_NAME}" >> $GITHUB_ENV
+          DMG_NAME="AgentLoom-${VERSION}-macos-${ARCH}.dmg"
+          cp "$DMG_PATH" "$DMG_NAME"
+          echo "artifact_name=${DMG_NAME}" >> $GITHUB_ENV
 
       - name: Package Linux artifact
         if: matrix.platform == 'ubuntu-22.04'
@@ -246,10 +295,17 @@ jobs:
         run: ls -la artifacts/
 
       - name: Generate checksums
+        id: checksums
         run: |
           cd artifacts
           sha256sum * > checksums.txt
           cat checksums.txt
+
+          # Extract SHA256 for macOS DMGs (for Homebrew cask)
+          ARM64_SHA=$(sha256sum *-macos-arm64.dmg 2>/dev/null | cut -d' ' -f1 || echo "")
+          X64_SHA=$(sha256sum *-macos-x64.dmg 2>/dev/null | cut -d' ' -f1 || echo "")
+          echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
+          echo "x64_sha=$X64_SHA" >> $GITHUB_OUTPUT
 
       - name: Determine version and release type
         id: release_info
@@ -281,6 +337,32 @@ jobs:
           echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Update Homebrew cask
+        env:
+          VERSION: ${{ steps.release_info.outputs.version }}
+          ARM64_SHA: ${{ steps.checksums.outputs.arm64_sha }}
+          X64_SHA: ${{ steps.checksums.outputs.x64_sha }}
+        run: |
+          CASK_FILE="homebrew-cask/Casks/agentloom.rb"
+
+          # Update version
+          sed -i 's/version "[^"]*"/version "'"$VERSION"'"/' "$CASK_FILE"
+
+          # Update SHA256 checksums (handles both placeholder and existing hashes)
+          sed -i 's/sha256 arm:   "[^"]*"/sha256 arm:   "'"$ARM64_SHA"'"/' "$CASK_FILE"
+          sed -i 's/intel: "[^"]*"/intel: "'"$X64_SHA"'"/' "$CASK_FILE"
+
+          echo "Updated Homebrew cask:"
+          cat "$CASK_FILE"
+
+      - name: Commit Homebrew cask update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add homebrew-cask/Casks/agentloom.rb
+          git diff --staged --quiet || git commit -m "chore: update Homebrew cask to ${{ steps.release_info.outputs.version }}"
+          git push origin HEAD:main || echo "Push failed - may need to manually update cask"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -294,22 +376,44 @@ jobs:
           body: |
             ## AgentLoom ${{ steps.release_info.outputs.version }}
 
-            ### Downloads
+            ### Installation
+
+            **macOS (Recommended):**
+            ```bash
+            brew tap Alpha-Coders/agentloom https://github.com/Alpha-Coders/agent-loom.git
+            brew install --cask --no-quarantine agentloom
+            ```
+
+            **Linux:**
+            ```bash
+            chmod +x AgentLoom-*-linux-x64.AppImage
+            ./AgentLoom-*-linux-x64.AppImage
+            ```
+
+            **Windows:** Download and run the setup installer below.
+
+            ### Direct Downloads
 
             | Platform | Architecture | Download |
             |----------|--------------|----------|
-            | macOS | Apple Silicon (M1/M2) | `AgentLoom-${{ steps.release_info.outputs.version }}-macos-arm64.zip` |
-            | macOS | Intel | `AgentLoom-${{ steps.release_info.outputs.version }}-macos-x64.zip` |
+            | macOS | Apple Silicon (M1/M2) | `AgentLoom-${{ steps.release_info.outputs.version }}-macos-arm64.dmg` |
+            | macOS | Intel | `AgentLoom-${{ steps.release_info.outputs.version }}-macos-x64.dmg` |
             | Linux | x64 | `AgentLoom-${{ steps.release_info.outputs.version }}-linux-x64.AppImage` |
             | Windows | x64 | `AgentLoom-${{ steps.release_info.outputs.version }}-windows-x64-setup.exe` |
 
-            ### Installation
+            <details>
+            <summary>Manual macOS installation (if not using Homebrew)</summary>
 
-            **macOS:** Unzip and drag `AgentLoom.app` to Applications. On first run, right-click and select "Open" to bypass Gatekeeper.
+            1. Download and open the `.dmg` file
+            2. Drag `AgentLoom.app` to your Applications folder
+            3. **Important:** Before first launch, open Terminal and run:
+               ```bash
+               xattr -cr /Applications/AgentLoom.app
+               ```
+            4. Now you can open AgentLoom normally
 
-            **Linux:** Make the AppImage executable (`chmod +x *.AppImage`) and run it.
-
-            **Windows:** Run the setup installer and follow the prompts.
+            > The app is not signed with an Apple Developer certificate. Without the `xattr` command, macOS will show a "damaged" error.
+            </details>
 
             ### Checksums
 
