@@ -3,208 +3,267 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AgentLoom - Manage your AI agent skills</title>
+  <title>AgentLoom — Manage your AI agent skills</title>
   <meta name="description" content="A desktop app to manage AI agent skills across Claude Code, Cursor, Codex, and more.">
   <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Alpha-Coders/agent-loom/main/src-tauri/icons/32x32.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --gold: #FFD700;
-      --bg: #09090b;
-      --card: #18181b;
-      --text: #fafafa;
-      --muted: #a1a1aa;
-      --border: rgba(255,255,255,0.1);
+      --gold: #F5C518;
+      --bg: #000;
+      --surface: rgba(255,255,255,0.03);
+      --surface-border: rgba(255,255,255,0.06);
+      --text: #fff;
+      --text-2: rgba(255,255,255,0.6);
+      --text-3: rgba(255,255,255,0.4);
+      --radius: 12px;
     }
 
+    html { font-size: 16px; }
+
     body {
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
     }
 
-    .container {
-      max-width: 960px;
+    .page {
+      max-width: 1000px;
       margin: 0 auto;
-      padding: 0 1.5rem;
+      padding: 80px 24px 48px;
     }
 
-    /* Hero */
-    .hero {
-      padding: 4rem 0 3rem;
+    /* Header */
+    header {
       text-align: center;
-      background: radial-gradient(ellipse at top, rgba(255,215,0,0.04) 0%, transparent 50%);
+      margin-bottom: 56px;
     }
 
     .logo {
-      width: 72px;
-      height: 72px;
-      margin-bottom: 1rem;
+      width: 64px;
+      height: 64px;
+      margin-bottom: 24px;
     }
 
     h1 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      margin-bottom: 0.5rem;
+      font-size: 40px;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      margin-bottom: 12px;
     }
 
     .tagline {
-      font-size: 1.1rem;
-      color: var(--muted);
-      margin-bottom: 1.5rem;
+      font-size: 18px;
+      color: var(--text-2);
+      font-weight: 400;
+      margin-bottom: 32px;
     }
 
-    .cta {
-      display: inline-flex;
-      gap: 0.75rem;
-      margin-bottom: 2.5rem;
+    /* Buttons */
+    .buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
     }
 
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
-      padding: 0.625rem 1.25rem;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 0.875rem;
+      justify-content: center;
+      gap: 8px;
+      height: 44px;
+      padding: 0 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
       text-decoration: none;
-      transition: all 0.15s;
+      transition: all 0.15s ease;
     }
 
-    .btn-primary { background: var(--gold); color: #000; }
-    .btn-primary:hover { filter: brightness(1.1); }
-    .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { background: #27272a; }
+    .btn-primary {
+      background: var(--gold);
+      color: #000;
+    }
 
-    .screenshot {
-      width: 100%;
-      max-width: 840px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      box-shadow: 0 20px 50px -15px rgba(0,0,0,0.5);
+    .btn-primary:hover {
+      background: #fff;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .btn-ghost:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(255,255,255,0.25);
     }
 
     /* Features */
-    .features-grid {
-      margin: 2rem 0;
+    .features {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 0.75rem;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 48px;
     }
 
     .feature {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.75rem;
-      padding: 1rem;
-      background: var(--card);
-      border-radius: 8px;
-      border: 1px solid var(--border);
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 20px;
     }
 
-    .feature-icon { font-size: 1.25rem; }
-    .feature h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.125rem; }
-    .feature p { color: var(--muted); font-size: 0.8rem; }
+    .feature-icon {
+      font-size: 20px;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .feature-title {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .feature-desc {
+      font-size: 13px;
+      color: var(--text-3);
+      line-height: 1.4;
+    }
+
+    /* Screenshot */
+    .screenshot-wrap {
+      margin-bottom: 48px;
+    }
+
+    .screenshot {
+      width: 100%;
+      border-radius: var(--radius);
+      border: 1px solid var(--surface-border);
+    }
 
     /* Tools */
     .tools {
-      padding: 2rem 0;
       text-align: center;
-      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      border-top: 1px solid var(--surface-border);
+      margin-bottom: 32px;
     }
 
     .tools-label {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-bottom: 0.75rem;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-3);
+      margin-bottom: 16px;
     }
 
     .tools-list {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 1.25rem;
-      font-size: 0.85rem;
-      color: var(--muted);
+      gap: 24px;
+      font-size: 14px;
+      color: var(--text-2);
     }
 
     /* Footer */
     footer {
-      padding: 2rem 0;
       text-align: center;
-      font-size: 0.8rem;
-      color: var(--muted);
+      padding-top: 32px;
+      border-top: 1px solid var(--surface-border);
     }
 
-    footer a { color: var(--muted); text-decoration: none; }
-    footer a:hover { color: var(--gold); }
-    .footer-links { display: flex; gap: 1.25rem; justify-content: center; margin-bottom: 0.5rem; }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 12px;
+    }
 
-    @media (max-width: 600px) {
-      .features-grid { grid-template-columns: 1fr; }
-      .cta { flex-direction: column; }
+    footer a {
+      font-size: 13px;
+      color: var(--text-3);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    footer a:hover {
+      color: var(--text);
+    }
+
+    .platforms {
+      font-size: 12px;
+      color: var(--text-3);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .page { padding: 48px 20px 32px; }
+      h1 { font-size: 32px; }
+      .tagline { font-size: 16px; }
+      .features { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 480px) {
+      .features { grid-template-columns: 1fr; }
+      .buttons { flex-direction: column; }
+      .btn { width: 100%; }
     }
   </style>
 </head>
 <body>
-  <section class="hero">
-    <div class="container">
-      <img src="https://raw.githubusercontent.com/Alpha-Coders/agent-loom/main/src-tauri/icons/readme-icon.png" alt="AgentLoom" class="logo">
+  <div class="page">
+    <header>
+      <img src="https://raw.githubusercontent.com/Alpha-Coders/agent-loom/main/src-tauri/icons/readme-icon.png" alt="" class="logo">
       <h1>AgentLoom</h1>
       <p class="tagline">Manage all your AI agent skills in one place</p>
-      <div class="cta">
+      <div class="buttons">
         <a href="https://github.com/Alpha-Coders/agent-loom/releases/latest" class="btn btn-primary">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           Download
         </a>
-        <a href="https://github.com/Alpha-Coders/agent-loom" class="btn btn-secondary">GitHub</a>
+        <a href="https://github.com/Alpha-Coders/agent-loom" class="btn btn-ghost">GitHub</a>
       </div>
+    </header>
 
-      <div class="features-grid">
-        <div class="feature">
-          <span class="feature-icon">📁</span>
-          <div>
-            <h3>Central storage</h3>
-            <p>All skills in one place, synced to every AI tool</p>
-          </div>
-        </div>
-        <div class="feature">
-          <span class="feature-icon">✏️</span>
-          <div>
-            <h3>Built-in editor</h3>
-            <p>Create and edit with markdown support</p>
-          </div>
-        </div>
-        <div class="feature">
-          <span class="feature-icon">✓</span>
-          <div>
-            <h3>Validation</h3>
-            <p>Auto-checks for errors and compatibility</p>
-          </div>
-        </div>
-        <div class="feature">
-          <span class="feature-icon">🔄</span>
-          <div>
-            <h3>One-click sync</h3>
-            <p>Sync to all tools instantly</p>
-          </div>
-        </div>
+    <div class="features">
+      <div class="feature">
+        <span class="feature-icon">📁</span>
+        <div class="feature-title">Central storage</div>
+        <div class="feature-desc">All skills synced to every AI tool</div>
       </div>
+      <div class="feature">
+        <span class="feature-icon">✏️</span>
+        <div class="feature-title">Built-in editor</div>
+        <div class="feature-desc">Create and edit with markdown</div>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">✓</span>
+        <div class="feature-title">Validation</div>
+        <div class="feature-desc">Auto-check errors & compatibility</div>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">🔄</span>
+        <div class="feature-title">One-click sync</div>
+        <div class="feature-desc">Sync to all tools instantly</div>
+      </div>
+    </div>
 
+    <div class="screenshot-wrap">
       <img src="screenshot-themes.png" alt="AgentLoom" class="screenshot">
     </div>
-  </section>
 
-  <section class="tools">
-    <div class="container">
+    <div class="tools">
       <p class="tools-label">Works with</p>
       <div class="tools-list">
         <span>Claude Code</span>
@@ -213,19 +272,16 @@
         <span>Gemini CLI</span>
         <span>Amp</span>
         <span>Goose</span>
-        <span>+ more</span>
       </div>
     </div>
-  </section>
 
-  <footer>
-    <div class="container">
+    <footer>
       <div class="footer-links">
         <a href="https://github.com/Alpha-Coders/agent-loom">GitHub</a>
         <a href="https://github.com/Alpha-Coders/agent-loom/blob/main/LICENSE">MIT License</a>
       </div>
-      <p>macOS · Windows · Linux</p>
-    </div>
-  </footer>
+      <p class="platforms">macOS · Windows · Linux</p>
+    </footer>
+  </div>
 </body>
 </html>
