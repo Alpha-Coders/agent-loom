@@ -182,7 +182,13 @@ jobs:
         if: matrix.platform == 'macos-latest'
         env:
           TARGET: ${{ matrix.target }}
-          # Tauri signing environment variables (only used if secrets exist)
+        run: npm run tauri build -- --target "$TARGET" --bundles dmg
+
+      - name: Build (macOS signed)
+        if: matrix.platform == 'macos-latest' && false
+        # NOTE: Enable this step and disable the above when Apple signing secrets are configured
+        env:
+          TARGET: ${{ matrix.target }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
