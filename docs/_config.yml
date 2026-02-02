@@ -1,7 +1,7 @@
 # GitHub Pages Jekyll Configuration
 title: AgentLoom
 description: One place to manage all your AI agent skills
-remote_theme: pages-themes/cayman@v0.2.0
+remote_theme: pages-themes/slate@v0.2.0
 
 # Repository info (enables "View on GitHub" button)
 repository: Alpha-Coders/agent-loom
@@ -18,6 +18,3 @@ plugins:
 # SEO and social
 url: https://alpha-coders.github.io
 baseurl: /agent-loom
-logo: /src-tauri/icons/readme-icon.png
-
-# No excludes needed - docs folder only contains documentation
