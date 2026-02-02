@@ -4,8 +4,8 @@
 cask "agentloom" do
   arch arm: "arm64", intel: "x64"
 
-  version "1.1.1"
-  sha256 arm:   "90598cb7f623da41c2de4688e2b5d9f06cb1c395b901b500e316437b6c3d5d2f",
+  version "1.1.2"
+  sha256 arm:   "6c2cebd3f8351d511b2b65515d401a2e074efe01383a4c46e1c9d0c8991e66e4",
          intel: "953f655d495b28f1578385ce3b0dfe41bd6e2fa15eaab152e3a1c275939a5f40"
 
   url "https://github.com/Alpha-Coders/agent-loom/releases/download/v#{version}/AgentLoom-#{version}-macos-#{arch}.dmg",
