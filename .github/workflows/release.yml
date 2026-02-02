@@ -152,12 +152,18 @@ jobs:
           fi
 
       - name: Import Apple signing certificate
-        if: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE != '' }}
+        if: matrix.platform == 'macos-latest'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
+          # Skip if no certificate is configured
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "No Apple certificate configured, skipping code signing setup"
+            exit 0
+          fi
+
           # Create a temporary keychain
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
