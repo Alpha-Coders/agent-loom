@@ -402,10 +402,11 @@ jobs:
             --base main \
             --head "$BRANCH"
 
-          # Enable auto-merge (requires "Allow auto-merge" in repo settings)
-          gh pr merge "$BRANCH" --auto --squash
+          # Try to enable auto-merge (requires "Allow auto-merge" in repo settings)
+          # May fail if no required checks exist - that's OK, PR is still created
+          gh pr merge "$BRANCH" --auto --squash || echo "Auto-merge not available, PR created for manual merge"
 
-          echo "Created PR for cask update with auto-merge enabled"
+          echo "Created PR for cask update"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
