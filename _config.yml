@@ -1,0 +1,42 @@
+# GitHub Pages Jekyll Configuration
+title: AgentLoom
+description: One place to manage all your AI agent skills
+remote_theme: pages-themes/cayman@v0.2.0
+
+# Repository info (enables "View on GitHub" button)
+repository: Alpha-Coders/agent-loom
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+
+# Plugins
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+
+# SEO and social
+url: https://alpha-coders.github.io
+baseurl: /agent-loom
+logo: /src-tauri/icons/readme-icon.png
+
+# Exclude files from Jekyll build
+exclude:
+  - node_modules/
+  - target/
+  - dist/
+  - src-tauri/
+  - crates/
+  - src/
+  - agents/
+  - plans/
+  - "*.rs"
+  - "*.toml"
+  - "*.lock"
+  - "*.json"
+  - "*.ts"
+  - "*.svelte"
+  - Makefile
+  - CLAUDE.md
+  - AGENTS.md
+  - CONTRIBUTING.md
