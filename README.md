@@ -71,32 +71,45 @@ You can also add custom folder targets for tools not listed above.
 
 ## Installation
 
-### Download
+### macOS (Homebrew)
 
-Get the latest release for your platform:
+The recommended way to install on macOS:
 
-| Platform | Download |
-|----------|----------|
-| macOS (Apple Silicon) | [Download](https://github.com/Alpha-Coders/agent-loom/releases/latest) |
-| macOS (Intel) | [Download](https://github.com/Alpha-Coders/agent-loom/releases/latest) |
-| Windows | [Download](https://github.com/Alpha-Coders/agent-loom/releases/latest) |
-| Linux | [Download](https://github.com/Alpha-Coders/agent-loom/releases/latest) |
+```bash
+brew tap Alpha-Coders/agentloom https://github.com/Alpha-Coders/agent-loom.git
+brew install --cask --no-quarantine agentloom
+```
 
-### macOS
-
-1. Unzip and drag `AgentLoom.app` to Applications
-2. On first run, right-click → Open (to bypass Gatekeeper)
+To upgrade:
+```bash
+brew upgrade --cask agentloom
+```
 
 ### Windows
 
-Run the installer and follow the prompts.
+Download the [latest release](https://github.com/Alpha-Coders/agent-loom/releases/latest) and run the installer.
 
 ### Linux
 
 ```bash
+# Download the AppImage from the latest release
 chmod +x AgentLoom-*.AppImage
 ./AgentLoom-*.AppImage
 ```
+
+<details>
+<summary>Manual macOS installation (without Homebrew)</summary>
+
+1. Download the `.dmg` from [releases](https://github.com/Alpha-Coders/agent-loom/releases/latest)
+2. Open the DMG and drag `AgentLoom.app` to Applications
+3. Before first launch, open Terminal and run:
+   ```bash
+   xattr -cr /Applications/AgentLoom.app
+   ```
+4. Now you can open AgentLoom normally
+
+> The app is not code-signed with an Apple Developer certificate. Without the `xattr` command, macOS will show a "damaged" error. This is a [known limitation](https://support.apple.com/en-us/102445) for open-source apps.
+</details>
 
 ## Development
 
