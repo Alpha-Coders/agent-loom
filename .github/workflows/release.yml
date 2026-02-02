@@ -361,9 +361,9 @@ jobs:
           # Update version
           sed -i 's/version "[^"]*"/version "'"$VERSION"'"/' "$CASK_FILE"
 
-          # Update SHA256 checksums (handles both placeholder and existing hashes)
+          # Update SHA256 checksums (use specific pattern to avoid matching 'arch' line)
           sed -i 's/sha256 arm:   "[^"]*"/sha256 arm:   "'"$ARM64_SHA"'"/' "$CASK_FILE"
-          sed -i 's/intel: "[^"]*"/intel: "'"$X64_SHA"'"/' "$CASK_FILE"
+          sed -i 's/\(sha256.*\)intel: "[^"]*"/\1intel: "'"$X64_SHA"'"/' "$CASK_FILE"
 
           echo "Updated Homebrew cask:"
           cat "$CASK_FILE"
