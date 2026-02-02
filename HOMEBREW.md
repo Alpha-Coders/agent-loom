@@ -1,6 +1,6 @@
 # AgentLoom Homebrew Tap
 
-This directory contains the Homebrew Cask formula for AgentLoom.
+This repository serves as a Homebrew tap. The cask formula is located in `/Casks/agentloom.rb`.
 
 ## Installation
 

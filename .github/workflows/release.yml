@@ -343,7 +343,7 @@ jobs:
           ARM64_SHA: ${{ steps.checksums.outputs.arm64_sha }}
           X64_SHA: ${{ steps.checksums.outputs.x64_sha }}
         run: |
-          CASK_FILE="homebrew-cask/Casks/agentloom.rb"
+          CASK_FILE="Casks/agentloom.rb"
 
           # Update version
           sed -i 's/version "[^"]*"/version "'"$VERSION"'"/' "$CASK_FILE"
@@ -359,7 +359,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add homebrew-cask/Casks/agentloom.rb
+          git add Casks/agentloom.rb
           git diff --staged --quiet || git commit -m "chore: update Homebrew cask to ${{ steps.release_info.outputs.version }}"
           git push origin HEAD:main || echo "Push failed - may need to manually update cask"
 
