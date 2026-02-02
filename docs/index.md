@@ -3,7 +3,7 @@ layout: default
 ---
 
 <p align="center">
-  <img src="src-tauri/icons/readme-icon.png" alt="AgentLoom Logo" width="128" height="128">
+  <img src="https://raw.githubusercontent.com/Alpha-Coders/agent-loom/main/src-tauri/icons/readme-icon.png" alt="AgentLoom Logo" width="128" height="128">
 </p>
 
 <h1 align="center">AgentLoom</h1>
@@ -25,7 +25,7 @@ layout: default
 AgentLoom is a desktop app that lets you manage AI agent skills from a single location. It works with any tool that supports the [agentskills.io](https://agentskills.io) open format. Instead of manually copying skills to each tool's directory, it maintains a central repository and syncs them via symlinks.
 
 <p align="center">
-  <img src="docs/screenshot-themes.png" alt="AgentLoom Screenshot" width="800">
+  <img src="screenshot-themes.png" alt="AgentLoom Screenshot" width="800">
 </p>
 
 ```

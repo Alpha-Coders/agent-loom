@@ -20,23 +20,4 @@ url: https://alpha-coders.github.io
 baseurl: /agent-loom
 logo: /src-tauri/icons/readme-icon.png
 
-# Exclude files from Jekyll build
-exclude:
-  - node_modules/
-  - target/
-  - dist/
-  - src-tauri/
-  - crates/
-  - src/
-  - agents/
-  - plans/
-  - "*.rs"
-  - "*.toml"
-  - "*.lock"
-  - "*.json"
-  - "*.ts"
-  - "*.svelte"
-  - Makefile
-  - CLAUDE.md
-  - AGENTS.md
-  - CONTRIBUTING.md
+# No excludes needed - docs folder only contains documentation
