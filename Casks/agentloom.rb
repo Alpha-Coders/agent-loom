@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 cask "agentloom" do
-  arch arm: "arm64", intel: "953f655d495b28f1578385ce3b0dfe41bd6e2fa15eaab152e3a1c275939a5f40"
+  arch arm: "arm64", intel: "x64"
 
   version "1.1.1"
   sha256 arm:   "90598cb7f623da41c2de4688e2b5d9f06cb1c395b901b500e316437b6c3d5d2f",
