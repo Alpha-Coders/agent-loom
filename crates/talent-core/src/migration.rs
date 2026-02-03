@@ -18,7 +18,7 @@ const CURRENT_DIR_NAME: &str = ".agents";
 const SKILLS_DIR: &str = "skills";
 
 /// Result of a migration operation
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct MigrationResult {
     /// Whether migration was performed
     pub migrated: bool,
@@ -37,19 +37,6 @@ pub struct MigrationResult {
 
     /// Errors encountered (non-fatal)
     pub errors: Vec<String>,
-}
-
-impl Default for MigrationResult {
-    fn default() -> Self {
-        Self {
-            migrated: false,
-            skills_count: 0,
-            skill_names: Vec::new(),
-            from_path: None,
-            to_path: None,
-            errors: Vec::new(),
-        }
-    }
 }
 
 /// Check if migration from legacy directory is needed and perform it
