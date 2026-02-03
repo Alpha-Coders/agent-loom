@@ -58,11 +58,12 @@ impl Default for MigrationResult {
 /// 1. Checks if ~/.agentloom/skills/ exists with skills
 /// 2. Checks if ~/.agents/skills/ is empty or doesn't exist
 /// 3. If migration is needed, copies skills from old to new location
-/// 4. Does NOT delete the old directory (user can do that manually)
+/// 4. Deletes the old ~/.agentloom directory after successful migration
 pub fn migrate_if_needed() -> Result<MigrationResult> {
     let home = dirs::home_dir().ok_or(Error::ConfigDirNotFound)?;
 
-    let legacy_skills_dir = home.join(LEGACY_DIR_NAME).join(SKILLS_DIR);
+    let legacy_dir = home.join(LEGACY_DIR_NAME);
+    let legacy_skills_dir = legacy_dir.join(SKILLS_DIR);
     let current_skills_dir = home.join(CURRENT_DIR_NAME).join(SKILLS_DIR);
 
     // Check if legacy directory exists and has skills
@@ -89,7 +90,19 @@ pub fn migrate_if_needed() -> Result<MigrationResult> {
     }
 
     // Perform migration
-    perform_migration(&legacy_skills_dir, &current_skills_dir, &legacy_skills)
+    let mut result = perform_migration(&legacy_skills_dir, &current_skills_dir, &legacy_skills)?;
+
+    // Delete the old directory if migration was successful (no errors)
+    if result.migrated && result.errors.is_empty() && result.skills_count > 0 {
+        if let Err(e) = fs::remove_dir_all(&legacy_dir) {
+            result.errors.push(format!(
+                "Migration successful but failed to delete old directory: {}",
+                e
+            ));
+        }
+    }
+
+    Ok(result)
 }
 
 /// Find skill directories in a given path
