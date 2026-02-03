@@ -33,9 +33,9 @@ AgentLoom is a desktop app that lets you manage AI agent skills from a single lo
 </p>
 
 ```
-~/.claude/skills/my-skill           →  ~/.agentloom/skills/my-skill
-~/.cursor/skills-cursor/my-skill    →  ~/.agentloom/skills/my-skill
-~/.codex/skills/my-skill            →  ~/.agentloom/skills/my-skill
+~/.claude/skills/my-skill    →  ~/.agents/skills/my-skill
+~/.cursor/skills/my-skill    →  ~/.agents/skills/my-skill
+~/.codex/skills/my-skill     →  ~/.agents/skills/my-skill
 ```
 
 ## Features
@@ -57,7 +57,7 @@ AgentLoom works with any tool that supports the [agentskills.io](https://agentsk
 | Claude Code | Anthropic | `~/.claude/skills/` |
 | Codex | OpenAI | `~/.codex/skills/` |
 | Gemini CLI | Google | `~/.gemini/skills/` |
-| Cursor | Anysphere | `~/.cursor/skills-cursor/` |
+| Cursor | Anysphere | `~/.cursor/skills/` |
 | Amp | Sourcegraph | `~/.amp/skills/` |
 | Goose | Block | `~/.goose/skills/` |
 | Roo Code | Roo | `~/.roo-code/skills/` |

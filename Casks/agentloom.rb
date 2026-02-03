@@ -24,7 +24,7 @@ cask "agentloom" do
   app "AgentLoom.app"
 
   zap trash: [
-    "~/.agentloom",
+    "~/.agents",
     "~/Library/Application Support/com.agentloom.app",
     "~/Library/Caches/com.agentloom.app",
     "~/Library/Preferences/com.agentloom.app.plist",

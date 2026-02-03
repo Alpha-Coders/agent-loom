@@ -66,7 +66,7 @@ pub struct ScannedSkill {
 /// User's selection for importing a skill from an external folder
 #[derive(Debug, Clone, Deserialize)]
 pub struct FolderImportSelection {
-    /// Skill name (kebab-case, used as folder name in ~/.agentloom/skills/)
+    /// Skill name (kebab-case, used as folder name in ~/.agents/skills/)
     pub name: String,
 
     /// Path to the source skill directory

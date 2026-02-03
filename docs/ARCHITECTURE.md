@@ -60,7 +60,7 @@ flowchart TB
 
     subgraph Storage["File System"]
         direction TB
-        AppDir["~/.agentloom/"]
+        AppDir["~/.agents/"]
         SkillsDir["skills/<br/>Central Repository"]
         ConfigFile["config.toml"]
 
@@ -217,7 +217,7 @@ This preserves native window controls (traffic lights) while allowing custom hea
 ## Storage Layout
 
 ```
-~/.agentloom/
+~/.agents/
 ├── config.toml          # Application configuration
 └── skills/              # Central skill storage
     ├── my-skill/
@@ -225,7 +225,7 @@ This preserves native window controls (traffic lights) while allowing custom hea
     └── another-skill/
         └── SKILL.md
 
-# Target tools create symlinks to ~/.agentloom/skills/*
+# Target tools create symlinks to ~/.agents/skills/*
 ```
 
 ## CLI Reference

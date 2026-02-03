@@ -150,7 +150,7 @@ This is an open source project. Always use feature branches and pull requests:
 ### Project Overview
 
 **AgentLoom** is a cross-platform GUI application for managing Agent Skills across multiple AI CLI tools:
-- Central skill storage in `~/.agentloom/skills/`
+- Central skill storage in `~/.agents/skills/`
 - Symlink syncing to: Claude Code, Codex, Gemini, Cursor, Amp, Goose
 - Validation engine for skill quality
 - Built-in markdown editor

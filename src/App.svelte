@@ -1024,7 +1024,7 @@
             <div class="field-hint">
               Lowercase letters, numbers, and hyphens only.
               {#if newSkillName.trim()}
-                <br />Creates: <code>~/.agentloom/skills/{newSkillName.trim().toLowerCase().replace(/\s+/g, '-')}/</code>
+                <br />Creates: <code>~/.agents/skills/{newSkillName.trim().toLowerCase().replace(/\s+/g, '-')}/</code>
               {/if}
             </div>
           </div>
