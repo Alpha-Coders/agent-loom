@@ -4,7 +4,7 @@ use crate::{
     AppState, DiscoveredSkillInfo, FolderImportSelectionInfo, ImportResultInfo,
     ImportSelectionInfo, ScannedSkillInfo, SkillInfo, StatsInfo,
 };
-use agentloom_core::{check_filemerge_available, open_filemerge, Importer, SyncResult, TargetInfo};
+use agentloom_core::{check_filemerge_available, open_filemerge, Importer, MigrationResult, SyncResult, TargetInfo};
 use std::path::PathBuf;
 
 /// Get all skills (sorted alphabetically by name)
@@ -463,6 +463,29 @@ pub fn import_from_folder(
         errors: result.errors,
         synced_to: result.synced_to,
     })
+}
+
+// === Migration Commands ===
+
+/// Check for and perform migration from legacy ~/.agentloom directory
+#[tauri::command]
+pub fn check_and_migrate(state: tauri::State<'_, AppState>) -> Result<MigrationResult, String> {
+    // Perform migration if needed
+    let result = agentloom_core::migrate_if_needed().map_err(|e| e.to_string())?;
+
+    // If migration occurred, refresh the manager to pick up migrated skills
+    if result.migrated {
+        let mut manager = state.manager.lock().map_err(|e| e.to_string())?;
+        manager.refresh_skills().map_err(|e| e.to_string())?;
+    }
+
+    Ok(result)
+}
+
+/// Check if legacy skills directory exists (without migrating)
+#[tauri::command]
+pub fn has_legacy_skills() -> bool {
+    agentloom_core::has_legacy_skills()
 }
 
 // === File Manager Integration ===

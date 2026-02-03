@@ -104,3 +104,14 @@ export interface FolderImportSelectionInfo {
   apply_fixes: boolean;
   resolution: 'import' | 'skip' | 'overwrite';
 }
+
+// === Migration Types ===
+
+export interface MigrationResult {
+  migrated: boolean;
+  skills_count: number;
+  skill_names: string[];
+  from_path: string | null;
+  to_path: string | null;
+  errors: string[];
+}

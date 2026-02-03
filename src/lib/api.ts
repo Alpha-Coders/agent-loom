@@ -1,7 +1,7 @@
 // API wrapper for Tauri commands
 
 import { invoke } from '@tauri-apps/api/core';
-import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, DiscoveredSkillInfo, ImportSelectionInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './types';
+import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, DiscoveredSkillInfo, ImportSelectionInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo, MigrationResult } from './types';
 
 export async function getSkills(): Promise<SkillInfo[]> {
   return invoke<SkillInfo[]>('get_skills');
@@ -115,4 +115,14 @@ export async function importFromFolder(selections: FolderImportSelectionInfo[]):
 
 export async function revealInFinder(path: string): Promise<void> {
   return invoke<void>('reveal_in_finder', { path });
+}
+
+// Migration
+
+export async function checkAndMigrate(): Promise<MigrationResult> {
+  return invoke<MigrationResult>('check_and_migrate');
+}
+
+export async function hasLegacySkills(): Promise<boolean> {
+  return invoke<boolean>('has_legacy_skills');
 }

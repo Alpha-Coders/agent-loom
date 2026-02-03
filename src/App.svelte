@@ -4,8 +4,8 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, addFolderTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder } from './lib/api';
-  import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo } from './lib/types';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, addFolderTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder, checkAndMigrate } from './lib/api';
+  import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo, MigrationResult } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
   import TabBar, { type Tab } from './lib/TabBar.svelte';
@@ -175,6 +175,21 @@
     try {
       isLoading = true;
       error = null;
+
+      // Check for and perform migration from legacy ~/.agentloom directory
+      try {
+        const migrationResult = await checkAndMigrate();
+        if (migrationResult.migrated && migrationResult.skills_count > 0) {
+          showSnackbar(
+            `Migrated ${migrationResult.skills_count} skill${migrationResult.skills_count === 1 ? '' : 's'} from ~/.agentloom to ~/.agents`,
+            'info',
+            5000
+          );
+        }
+      } catch (migrationError) {
+        console.error('Migration check failed:', migrationError);
+        // Non-fatal, continue loading
+      }
 
       const [targetsData, statsData] = await Promise.all([
         getTargets(),

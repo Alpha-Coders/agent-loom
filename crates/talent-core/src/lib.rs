@@ -10,6 +10,7 @@ pub mod config;
 pub mod error;
 pub mod importer;
 pub mod manager;
+pub mod migration;
 pub mod skill;
 pub mod syncer;
 pub mod target;
@@ -17,6 +18,7 @@ pub mod validator;
 
 pub use config::Config;
 pub use error::{Error, Result};
+pub use migration::{migrate_if_needed, has_legacy_skills, legacy_skills_dir, MigrationResult};
 pub use importer::{
     check_filemerge_available, open_filemerge, ConflictInfo, ConflictResolution, DiscoveredSkill,
     FolderImportSelection, ImportResult, ImportSelection, Importer, ScannedSkill,
