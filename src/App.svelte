@@ -139,17 +139,21 @@
     snackbars = snackbars.filter(s => s.id !== id);
   }
 
-  function formatSyncMessage(created: number, removed: number): string {
+  function formatSyncMessage(created: number, removed: number, skippedNative: number = 0): string {
+    let msg: string;
     if (created === 0 && removed === 0) {
-      return 'All targets up to date';
+      msg = 'All targets up to date';
+    } else if (created > 0 && removed === 0) {
+      msg = `Added ${created} skill${created === 1 ? '' : 's'} to targets`;
+    } else if (created === 0 && removed > 0) {
+      msg = `Removed ${removed} skill${removed === 1 ? '' : 's'} from targets`;
+    } else {
+      msg = `Added ${created}, removed ${removed} skill${created + removed === 1 ? '' : 's'}`;
     }
-    if (created > 0 && removed === 0) {
-      return `Added ${created} skill${created === 1 ? '' : 's'} to targets`;
+    if (skippedNative > 0) {
+      msg += ` (${skippedNative} native skill${skippedNative === 1 ? '' : 's'} preserved)`;
     }
-    if (created === 0 && removed > 0) {
-      return `Removed ${removed} skill${removed === 1 ? '' : 's'} from targets`;
-    }
-    return `Added ${created}, removed ${removed} skill${created + removed === 1 ? '' : 's'}`;
+    return msg;
   }
 
   let hasUnsavedChanges = $derived(editorContent !== originalContent);
@@ -223,6 +227,7 @@
       // Calculate totals
       const totalCreated = results.reduce((sum, r) => sum + r.created.length, 0);
       const totalRemoved = results.reduce((sum, r) => sum + r.removed.length, 0);
+      const totalSkippedNative = results.reduce((sum, r) => sum + (r.skipped_native?.length ?? 0), 0);
       const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);
 
       if (totalErrors > 0) {
@@ -231,7 +236,7 @@
       } else {
         // Show auto-dismissing snackbar for success
         lastSyncResults = [];
-        showSnackbar(formatSyncMessage(totalCreated, totalRemoved), 'success');
+        showSnackbar(formatSyncMessage(totalCreated, totalRemoved, totalSkippedNative), 'success');
       }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);

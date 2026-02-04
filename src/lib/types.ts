@@ -47,6 +47,7 @@ export interface SyncResult {
   created: string[];
   removed: string[];
   unchanged: string[];
+  skipped_native: string[];
   errors: SyncError[];
 }
 

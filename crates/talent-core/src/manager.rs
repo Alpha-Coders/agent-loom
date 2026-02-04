@@ -367,12 +367,17 @@ impl SkillManager {
             return Err(Error::SkillNotFound(skill_path));
         }
 
-        // Remove symlinks from all targets FIRST
+        // Remove symlinks from all targets FIRST (only symlinks, never native content)
         for target in &self.targets {
             if target.enabled {
-                let symlink = target.skill_link_path(name);
-                if symlink.exists() || symlink.is_symlink() {
-                    let _ = std::fs::remove_file(&symlink);
+                let link_path = target.skill_link_path(name);
+                // Only remove if it's actually a symlink — never delete native content
+                if link_path
+                    .symlink_metadata()
+                    .map(|m| m.file_type().is_symlink())
+                    .unwrap_or(false)
+                {
+                    let _ = std::fs::remove_file(&link_path);
                 }
             }
         }
