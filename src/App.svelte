@@ -9,7 +9,8 @@
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
   import TabBar, { type Tab } from './lib/TabBar.svelte';
-  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Power, Search, type Icon } from 'lucide-svelte';
+  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Power, Search, Eye, PenLine, type Icon } from 'lucide-svelte';
+  import { marked } from 'marked';
   import { OverlayScrollbarsComponent } from 'overlayscrollbars-svelte';
   import 'overlayscrollbars/overlayscrollbars.css';
 
@@ -121,6 +122,7 @@
   let originalContent = $state('');
   let isSaving = $state(false);
   let isFixing = $state(false);
+  let editorMode = $state<'edit' | 'preview'>('preview');
 
   // Context menu state
   interface ContextMenuItem {
@@ -204,6 +206,42 @@
     }
     return msg;
   }
+
+  // Frontmatter parsing for preview mode
+  function parseFrontmatter(content: string): { fields: [string, string][]; body: string } {
+    const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+    if (!match) return { fields: [], body: content };
+
+    const yamlBlock = match[1];
+    const body = match[2];
+    const fields: [string, string][] = [];
+
+    for (const line of yamlBlock.split('\n')) {
+      const colonIdx = line.indexOf(':');
+      if (colonIdx > 0) {
+        const key = line.slice(0, colonIdx).trim();
+        const value = line.slice(colonIdx + 1).trim();
+        if (key) fields.push([key, value]);
+      }
+    }
+
+    return { fields, body };
+  }
+
+  let renderedMarkdown = $derived.by(() => {
+    const { fields, body } = parseFrontmatter(editorContent);
+
+    let frontmatterHtml = '';
+    if (fields.length > 0) {
+      const rows = fields
+        .map(([k, v]) => `<tr><td class="fm-key">${k}</td><td class="fm-value">${v}</td></tr>`)
+        .join('');
+      frontmatterHtml = `<table class="frontmatter-table"><tbody>${rows}</tbody></table>`;
+    }
+
+    const bodyHtml = marked.parse(body, { async: false }) as string;
+    return frontmatterHtml + bodyHtml;
+  });
 
   let hasUnsavedChanges = $derived(editorContent !== originalContent);
   let hasNewSkillFormInput = $derived(newSkillName.trim() !== '' || newSkillDescription.trim() !== '');
@@ -409,6 +447,7 @@
       editingSkill = skill;
       editorContent = content;
       originalContent = content;
+      editorMode = 'preview';
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -1052,16 +1091,17 @@
             <X class="icon" size={16} strokeWidth={1.5} />
           </button>
         </div>
+        <div class="editor-header-gap"></div>
+        <div class="pane-actions">
+          <button class="toolbar-button destructive" onclick={(e) => handleDeleteSkill(editingSkill!, e)} title="Delete skill">
+            <Trash2 class="icon" size={14} strokeWidth={1.5} />
+          </button>
+        </div>
         <div class="editor-title">
           <h2>{editingSkill.name}</h2>
           {#if hasUnsavedChanges}
             <span class="unsaved-dot"></span>
           {/if}
-        </div>
-        <div class="pane-actions">
-          <button class="toolbar-button destructive" onclick={(e) => handleDeleteSkill(editingSkill!, e)} title="Delete skill">
-            <Trash2 class="icon" size={14} strokeWidth={1.5} />
-          </button>
         </div>
       </div>
       {#if editingSkill.validation_errors.length > 0}
@@ -1079,12 +1119,45 @@
         </div>
       {/if}
       <div class="editor-container">
-        <SkillEditor content={editorContent} onchange={handleEditorChange} />
+        {#if editorMode === 'edit'}
+          <SkillEditor content={editorContent} onchange={handleEditorChange} />
+        {:else}
+          <OverlayScrollbarsComponent class="preview-scroll-container" options={{ scrollbars: { autoHide: 'scroll', autoHideDelay: 1000 } }} defer>
+            <div class="preview-container">
+              {@html renderedMarkdown}
+            </div>
+          </OverlayScrollbarsComponent>
+        {/if}
       </div>
       <div class="editor-toolbar">
-        <button class="pane-action primary" onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges} title="Save">
-          {isSaving ? '...' : 'Save'}
-        </button>
+        <div class="toolbar-slot"></div>
+        <div class="segmented-control">
+          <button
+            class="segment"
+            class:active={editorMode === 'preview'}
+            onclick={() => editorMode = 'preview'}
+            title="Preview"
+          >
+            <Eye class="icon" size={13} strokeWidth={1.5} />
+            <span class="segment-label">View</span>
+          </button>
+          <button
+            class="segment"
+            class:active={editorMode === 'edit'}
+            onclick={() => editorMode = 'edit'}
+            title="Edit"
+          >
+            <PenLine class="icon" size={13} strokeWidth={1.5} />
+            <span class="segment-label">Edit</span>
+          </button>
+        </div>
+        <div class="toolbar-slot">
+          {#if editorMode === 'edit'}
+            <button class="pane-action primary" onclick={handleSaveSkill} disabled={isSaving || !hasUnsavedChanges} title="Save">
+              {isSaving ? '...' : 'Save'}
+            </button>
+          {/if}
+        </div>
       </div>
     {:else if showNewSkillForm}
       <div class="pane-header editor-header">
@@ -2150,15 +2223,23 @@
   .editor-header {
     background: var(--color-sidebar);
     transition: background-color var(--theme-transition);
+    position: relative;
   }
 
-  .editor-title {
+  .editor-header-gap {
     flex: 1;
+  }
+
+
+  .editor-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: var(--space-2);
-    min-width: 0;
+    max-width: 35%;
+    pointer-events: none;
   }
 
   .editor-title h2 {
@@ -2219,17 +2300,234 @@
     cursor: not-allowed;
   }
 
+  /* Segmented Control (Edit/View toggle) */
+  .segmented-control {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    -webkit-app-region: no-drag;
+  }
+
+  .segment {
+    height: 28px;
+    padding: 0 10px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    transition: background 0.15s ease, color 0.15s ease;
+    -webkit-app-region: no-drag;
+  }
+
+  .segment + .segment {
+    border-left: 1px solid var(--color-border);
+  }
+
+  .segment-label {
+    line-height: 1;
+  }
+
+  .segment:hover:not(.active) {
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .segment.active {
+    background: var(--color-primary-muted);
+    color: var(--color-primary);
+  }
+
   .editor-container {
     flex: 1;
     overflow: hidden;
     animation: editor-fade-in 0.2s ease-out;
   }
 
+  /* Preview Container */
+  :global(.preview-scroll-container) {
+    flex: 1;
+    height: 100%;
+  }
+
+  .preview-container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-8);
+    font-size: var(--font-base);
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: auto;
+  }
+
+  /* Preview: Frontmatter table */
+  .preview-container :global(.frontmatter-table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: var(--space-6);
+    font-size: var(--font-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .preview-container :global(.frontmatter-table td) {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .preview-container :global(.frontmatter-table tr:last-child td) {
+    border-bottom: none;
+  }
+
+  .preview-container :global(.fm-key) {
+    color: var(--color-text-muted);
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+    width: 1%;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: var(--font-xs);
+  }
+
+  .preview-container :global(.fm-value) {
+    color: var(--color-text);
+  }
+
+  /* Preview: Typography */
+  .preview-container :global(h1),
+  .preview-container :global(h2),
+  .preview-container :global(h3),
+  .preview-container :global(h4),
+  .preview-container :global(h5),
+  .preview-container :global(h6) {
+    color: var(--color-text);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.3;
+    margin: 1.5em 0 0.5em 0;
+  }
+
+  .preview-container :global(h1) { font-size: 1.6em; }
+  .preview-container :global(h2) { font-size: 1.35em; }
+  .preview-container :global(h3) { font-size: 1.15em; }
+  .preview-container :global(h4) { font-size: 1em; }
+
+  .preview-container :global(h1:first-child),
+  .preview-container :global(h2:first-child),
+  .preview-container :global(h3:first-child) {
+    margin-top: 0;
+  }
+
+  .preview-container :global(p) {
+    margin: 0.75em 0;
+  }
+
+  .preview-container :global(a) {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  .preview-container :global(a:hover) {
+    text-decoration: underline;
+  }
+
+  /* Preview: Lists */
+  .preview-container :global(ul),
+  .preview-container :global(ol) {
+    padding-left: 1.5em;
+    margin: 0.75em 0;
+  }
+
+  .preview-container :global(li) {
+    margin: 0.25em 0;
+  }
+
+  /* Preview: Code */
+  .preview-container :global(code) {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.9em;
+    padding: 2px 6px;
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    color: var(--color-primary);
+  }
+
+  .preview-container :global(pre) {
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    overflow-x: auto;
+    margin: 1em 0;
+    border: 1px solid var(--color-border);
+  }
+
+  .preview-container :global(pre code) {
+    background: none;
+    padding: 0;
+    font-size: var(--font-sm);
+    color: var(--color-text);
+  }
+
+  /* Preview: Blockquotes */
+  .preview-container :global(blockquote) {
+    border-left: 3px solid var(--color-primary);
+    margin: 1em 0;
+    padding: var(--space-2) var(--space-4);
+    color: var(--color-text-muted);
+  }
+
+  .preview-container :global(blockquote p) {
+    margin: 0.25em 0;
+  }
+
+  /* Preview: Horizontal rules */
+  .preview-container :global(hr) {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 1.5em 0;
+  }
+
+  /* Preview: Tables */
+  .preview-container :global(table:not(.frontmatter-table)) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: var(--font-sm);
+  }
+
+  .preview-container :global(table:not(.frontmatter-table) th),
+  .preview-container :global(table:not(.frontmatter-table) td) {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  .preview-container :global(table:not(.frontmatter-table) th) {
+    background: var(--color-surface);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
+  }
+
+  /* Preview: Images */
+  .preview-container :global(img) {
+    max-width: 100%;
+    border-radius: var(--radius-md);
+  }
+
   .editor-toolbar {
     height: var(--toolbar-height);
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     padding: 0 var(--toolbar-padding-x);
     border-top: 1px solid var(--color-border);
     background: var(--color-sidebar);
@@ -2237,6 +2535,16 @@
     transition:
       background-color var(--theme-transition),
       border-color var(--theme-transition);
+  }
+
+  .toolbar-slot {
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .toolbar-slot:last-child {
+    justify-content: flex-end;
   }
 
   .toolbar-button {
