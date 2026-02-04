@@ -4,7 +4,9 @@ use crate::{
     AppState, DiscoveredSkillInfo, FolderImportSelectionInfo, ImportResultInfo,
     ImportSelectionInfo, ScannedSkillInfo, SkillInfo, StatsInfo,
 };
-use agentloom_core::{check_filemerge_available, open_filemerge, Importer, MigrationResult, SyncResult, TargetInfo};
+use agentloom_core::{
+    check_filemerge_available, open_filemerge, Importer, MigrationResult, SyncResult, TargetInfo,
+};
 use std::path::PathBuf;
 
 /// Get all skills (sorted alphabetically by name)
