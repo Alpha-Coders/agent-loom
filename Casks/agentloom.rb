@@ -2,11 +2,11 @@
 # frozen_string_literal: true
 
 cask "agentloom" do
-  arch arm: "arm64", intel: "x64"
+  arch arm: "arm64", intel: "570b4610979962ae6c0d6506696083bdaa63f95ef25d469f1adb64cfba23ece3"
 
-  version "1.1"
-  sha256 arm:   "6506c3fa5dde819007f0d425c9d3d4c80ba9d77a4cba46b1ed811505dca021b8",
-         intel: "4ad70eb1e23f0c16c03e1abdb56d9c5fc4ecd3c648b5c4831f539af7ef300c6e"
+  version "1.2"
+  sha256 arm:   "2d5c0323969776ba31a25ae0e6155c6dc41d77c9829e7a49b3ded993d3d8accc",
+         intel: "570b4610979962ae6c0d6506696083bdaa63f95ef25d469f1adb64cfba23ece3"
 
   url "https://github.com/Alpha-Coders/agent-loom/releases/download/v#{version}/AgentLoom-#{version}-macos-#{arch}.dmg",
       verified: "github.com/Alpha-Coders/agent-loom/"
