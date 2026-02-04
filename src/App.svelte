@@ -4,12 +4,12 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
-  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, addFolderTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder, checkAndMigrate } from './lib/api';
+  import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, addFolderTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder, checkAndMigrate, searchSkills } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo, MigrationResult } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
   import TabBar, { type Tab } from './lib/TabBar.svelte';
-  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Power, type Icon } from 'lucide-svelte';
+  import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Power, Search, type Icon } from 'lucide-svelte';
   import { OverlayScrollbarsComponent } from 'overlayscrollbars-svelte';
   import 'overlayscrollbars/overlayscrollbars.css';
 
@@ -65,6 +65,55 @@
   let scannedSkills = $state<ScannedSkillInfo[]>([]);
   let isFolderImporting = $state(false);
 
+
+  // Search state
+  let searchQuery = $state('');
+  let searchMatchingFolders = $state<Set<string> | null>(null);
+  let searchDebounceTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+  let isSearching = $state(false);
+
+  let filteredSkills = $derived.by(() => {
+    if (!searchQuery.trim()) return skills;
+    const query = searchQuery.toLowerCase();
+    // Local metadata filter for instant feedback
+    const metadataMatches = skills.filter(
+      s => s.name.toLowerCase().includes(query) || s.description.toLowerCase().includes(query)
+    );
+    // If backend content search returned results, merge them in
+    if (searchMatchingFolders !== null) {
+      const folderSet = new Set(metadataMatches.map(s => s.folder_name));
+      const contentOnly = skills.filter(
+        s => searchMatchingFolders!.has(s.folder_name) && !folderSet.has(s.folder_name)
+      );
+      return [...metadataMatches, ...contentOnly];
+    }
+    return metadataMatches;
+  });
+
+  function handleSearchInput(value: string) {
+    searchQuery = value;
+    // Clear any pending backend search
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    if (!value.trim()) {
+      searchMatchingFolders = null;
+      isSearching = false;
+      return;
+    }
+    // Debounce the backend content search
+    isSearching = true;
+    searchDebounceTimer = setTimeout(async () => {
+      try {
+        const matches = await searchSkills(value.trim());
+        // Only apply results if the query hasn't changed while waiting
+        if (searchQuery.trim() === value.trim()) {
+          searchMatchingFolders = new Set(matches);
+          isSearching = false;
+        }
+      } catch {
+        isSearching = false;
+      }
+    }, 200);
+  }
 
   // Editor state
   let editingSkill = $state<SkillInfo | null>(null);
@@ -871,7 +920,7 @@
   <!-- Pane 2: Skills -->
   <div class="skills-pane">
     <div class="pane-header">
-      <span class="pane-title">{skills.length} Skills</span>
+      <span class="pane-title">{searchQuery ? `${filteredSkills.length} / ${skills.length}` : skills.length} Skills</span>
       <div class="pane-actions">
         <button class="pane-action" onclick={handleRefresh} disabled={isRefreshing} title="Refresh">
           <span class="refresh-icon" class:spinning={isRefreshing}>
@@ -880,6 +929,26 @@
         </button>
       </div>
     </div>
+
+    {#if skills.length > 0}
+      <div class="search-bar">
+        <Search class="search-icon" size={14} strokeWidth={1.5} />
+        <input
+          class="search-input"
+          type="text"
+          placeholder="Search skills…"
+          value={searchQuery}
+          oninput={(e) => handleSearchInput(e.currentTarget.value)}
+        />
+        {#if isSearching}
+          <span class="search-spinner"></span>
+        {:else if searchQuery}
+          <button class="search-clear" onclick={() => handleSearchInput('')} aria-label="Clear search">
+            <X class="icon" size={12} strokeWidth={2} />
+          </button>
+        {/if}
+      </div>
+    {/if}
 
     <div class="skills-content">
       {#if lastSyncResults.length > 0}
@@ -929,8 +998,14 @@
             <p class="empty-state-title">No skills yet</p>
             <p class="empty-state-hint">Create a new skill to get started</p>
           </div>
+        {:else if filteredSkills.length === 0}
+          <div class="empty-state">
+            <Search class="empty-state-icon" size={32} strokeWidth={1} />
+            <p class="empty-state-title">No matches</p>
+            <p class="empty-state-hint">Try a different search term</p>
+          </div>
         {:else}
-          {#each skills as skill}
+          {#each filteredSkills as skill}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
@@ -1638,6 +1713,75 @@
     transition:
       background-color var(--theme-transition),
       border-color var(--theme-transition);
+  }
+
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+    transition: border-color var(--theme-transition);
+  }
+
+  :global(.search-icon) {
+    flex-shrink: 0;
+    color: var(--color-text-dim);
+    transition: color var(--theme-transition);
+  }
+
+  .search-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: var(--font-xs);
+    font-family: inherit;
+    color: var(--color-text);
+    padding: 2px 0;
+    transition: color var(--theme-transition);
+  }
+
+  .search-input::placeholder {
+    color: var(--color-text-dim);
+    transition: color var(--theme-transition);
+  }
+
+  .search-clear {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    background: var(--color-surface);
+    border: none;
+    border-radius: 50%;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .search-clear:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
+
+  .search-spinner {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--color-text-dim);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .skills-content {

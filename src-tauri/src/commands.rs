@@ -89,6 +89,38 @@ pub fn validate_all(state: tauri::State<'_, AppState>) -> Result<Vec<SkillInfo>,
     Ok(skills)
 }
 
+/// Search skills by matching a query against name, description, and file content
+#[tauri::command]
+pub fn search_skills(
+    state: tauri::State<'_, AppState>,
+    query: String,
+) -> Result<Vec<String>, String> {
+    let manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let query_lower = query.to_lowercase();
+
+    let matching: Vec<String> = manager
+        .skills()
+        .iter()
+        .filter(|skill| {
+            if skill.name().to_lowercase().contains(&query_lower) {
+                return true;
+            }
+            if skill.description().to_lowercase().contains(&query_lower) {
+                return true;
+            }
+            if let Ok(content) = skill.raw_content() {
+                if content.to_lowercase().contains(&query_lower) {
+                    return true;
+                }
+            }
+            false
+        })
+        .map(|s| s.folder_name().to_string())
+        .collect();
+
+    Ok(matching)
+}
+
 /// Refresh skills from disk (sorted alphabetically by name)
 #[tauri::command]
 pub fn refresh_skills(state: tauri::State<'_, AppState>) -> Result<Vec<SkillInfo>, String> {
