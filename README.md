@@ -38,15 +38,16 @@ AgentLoom is a desktop app that lets you manage AI agent skills from a single lo
 ~/.codex/skills/my-skill     →  ~/.agents/skills/my-skill
 ```
 
+> **Why `~/.agents/skills/`?** — Every AI tool stores skills in its own directory. AgentLoom uses `~/.agents/skills/` as one shared home for all of them. We'd love to see this become a common convention — a single place any AI tool can look to find skills, no matter who made it. If you're building an AI tool, consider supporting `~/.agents/skills/` as a shared skill directory.
+
 ## Features
 
-- **Unified Management** — Create, edit, and organize all your skills in one place
-- **Multi-Target Sync** — One click to sync skills across all your AI tools
-- **Built-in Editor** — Full-featured markdown editor with syntax highlighting (CodeMirror 6)
-- **Validation** — Validates skills against the [agentskills.io](https://agentskills.io) specification with auto-fix
-- **Import** — Import existing skills from any target, folder, or via drag-and-drop
-- **Theme Support** — System, light, and dark themes with native macOS integration
-- **Cross-Platform** — Works on macOS, Windows, and Linux
+- **One-Click Sync** — Symlinks skills to 12+ AI tools at once — Claude Code, Codex, Cursor, Gemini CLI, and more
+- **Import from Anywhere** — Pull in existing skills from installed AI tools, pick a folder, or drag-and-drop
+- **Validation & Auto-Fix** — Checks skills against the [agentskills.io](https://agentskills.io) spec with one-click fixes for common issues
+- **Built-in Editor** — Markdown editor with live preview, syntax highlighting, and find-in-editor (CodeMirror 6)
+- **Target Management** — See sync status per tool, enable or disable targets, add custom folder targets
+- **Cross-Platform** — macOS (Homebrew), Windows, and Linux
 
 ## Supported Tools
 
