@@ -4,7 +4,7 @@
 cask "agentloom" do
   arch arm: "arm64", intel: "x64"
 
-  version "1.1.0"
+  version "1.1"
   sha256 arm:   "1d90ab6e94520ecd49fde976c45705212fcd31d7c125c5602e0e53efe80e0e19",
          intel: "953f655d495b28f1578385ce3b0dfe41bd6e2fa15eaab152e3a1c275939a5f40"
 
