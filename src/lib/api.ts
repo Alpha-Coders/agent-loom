@@ -31,6 +31,10 @@ export async function refreshSkills(): Promise<SkillInfo[]> {
   return invoke<SkillInfo[]>('refresh_skills');
 }
 
+export async function searchSkills(query: string): Promise<string[]> {
+  return invoke<string[]>('search_skills', { query });
+}
+
 export async function deleteSkill(name: string): Promise<void> {
   return invoke<void>('delete_skill', { name });
 }

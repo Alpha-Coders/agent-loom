@@ -173,11 +173,7 @@ impl Syncer {
     ///
     /// If a non-symlink (native content) exists at `link_path`, it is skipped
     /// to protect user data. AgentLoom never deletes native skill folders.
-    fn create_symlink(
-        &self,
-        link_path: &Path,
-        target_path: &Path,
-    ) -> Result<SymlinkAction> {
+    fn create_symlink(&self, link_path: &Path, target_path: &Path) -> Result<SymlinkAction> {
         // Check if something already exists at the link path
         if link_path.exists() || link_path.symlink_metadata().is_ok() {
             // Check if it's already a symlink or junction

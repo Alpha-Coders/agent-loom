@@ -142,7 +142,9 @@ fn perform_migration(
                 result.skill_names.push(skill_name.clone());
             }
             Err(e) => {
-                result.errors.push(format!("Failed to migrate '{}': {}", skill_name, e));
+                result
+                    .errors
+                    .push(format!("Failed to migrate '{}': {}", skill_name, e));
             }
         }
     }

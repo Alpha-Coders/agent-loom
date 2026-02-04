@@ -222,6 +222,7 @@ pub fn run() {
             commands::validate_skill,
             commands::validate_all,
             commands::refresh_skills,
+            commands::search_skills,
             commands::delete_skill,
             commands::rename_skill,
             commands::get_stats,
