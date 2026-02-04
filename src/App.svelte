@@ -7,6 +7,7 @@
   import { getSkills, getTargets, syncAll, validateAll, refreshSkills, createSkill, deleteSkill, getStats, getSkillContent, saveSkillContent, validateSkill, importAllSkills, toggleTarget, addFolderTarget, fixSkill, scanFolderForSkills, importFromFolder, revealInFinder, checkAndMigrate, searchSkills } from './lib/api';
   import type { SkillInfo, TargetInfo, SyncResult, StatsInfo, ImportResultInfo, ScannedSkillInfo, FolderImportSelectionInfo, MigrationResult } from './lib/types';
   import SkillEditor from './lib/SkillEditor.svelte';
+  import SearchBar from './lib/SearchBar.svelte';
   import ImportFromFolderModal from './lib/ImportFromFolderModal.svelte';
   import TabBar, { type Tab } from './lib/TabBar.svelte';
   import { Plus, RefreshCw, RotateCcw, Download, X, Sparkles, Trash2, FolderOpen, FilePenLine, Power, Search, Eye, PenLine, type Icon } from 'lucide-svelte';
@@ -123,6 +124,13 @@
   let isSaving = $state(false);
   let isFixing = $state(false);
   let editorMode = $state<'edit' | 'preview'>('preview');
+
+  // Find-in-editor state
+  let showFindBar = $state(false);
+  let findQuery = $state('');
+  let findMatchIndex = $state(0);
+  let findTotalMatches = $state(0);
+  let previewSearchCleanup: (() => void) | null = null;
 
   // Context menu state
   interface ContextMenuItem {
@@ -498,6 +506,7 @@
       });
       if (!confirmed) return;
     }
+    closeFindBar();
     editingSkill = null;
     editorContent = '';
     originalContent = '';
@@ -520,6 +529,149 @@
   function handleEditorChange(content: string) {
     editorContent = content;
   }
+
+  // === Find-in-Editor Handlers ===
+
+  function handleFindSearch(query: string) {
+    findQuery = query;
+    findMatchIndex = 0;
+    findTotalMatches = 0;
+    if (editorMode === 'preview') {
+      applyPreviewSearch(query);
+    }
+  }
+
+  function handleFindNext() {
+    if (findTotalMatches === 0) return;
+    findMatchIndex = (findMatchIndex + 1) % findTotalMatches;
+    if (editorMode === 'preview') {
+      scrollToPreviewMatch(findMatchIndex);
+    }
+  }
+
+  function handleFindPrev() {
+    if (findTotalMatches === 0) return;
+    findMatchIndex = (findMatchIndex - 1 + findTotalMatches) % findTotalMatches;
+    if (editorMode === 'preview') {
+      scrollToPreviewMatch(findMatchIndex);
+    }
+  }
+
+  function closeFindBar() {
+    showFindBar = false;
+    findQuery = '';
+    findMatchIndex = 0;
+    findTotalMatches = 0;
+    cleanupPreviewSearch();
+  }
+
+  function handleFindMatchCount(count: number) {
+    findTotalMatches = count;
+    if (findMatchIndex >= count) {
+      findMatchIndex = 0;
+    }
+  }
+
+  function cleanupPreviewSearch() {
+    if (previewSearchCleanup) {
+      previewSearchCleanup();
+      previewSearchCleanup = null;
+    }
+  }
+
+  function applyPreviewSearch(query: string) {
+    cleanupPreviewSearch();
+
+    if (!query) {
+      findTotalMatches = 0;
+      return;
+    }
+
+    const container = document.querySelector('.preview-container');
+    if (!container) return;
+
+    const lowerQuery = query.toLowerCase();
+    const marks: HTMLElement[] = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    const textNodes: Text[] = [];
+
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      textNodes.push(node as Text);
+    }
+
+    for (const textNode of textNodes) {
+      const text = textNode.textContent || '';
+      const lowerText = text.toLowerCase();
+      let idx = lowerText.indexOf(lowerQuery);
+      if (idx === -1) continue;
+
+      const parent = textNode.parentNode;
+      if (!parent) continue;
+
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+
+      while (idx !== -1) {
+        if (idx > lastIdx) {
+          frag.appendChild(document.createTextNode(text.slice(lastIdx, idx)));
+        }
+        const mark = document.createElement('mark');
+        mark.className = 'find-match';
+        mark.textContent = text.slice(idx, idx + query.length);
+        frag.appendChild(mark);
+        marks.push(mark);
+        lastIdx = idx + query.length;
+        idx = lowerText.indexOf(lowerQuery, lastIdx);
+      }
+
+      if (lastIdx < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+      }
+
+      parent.replaceChild(frag, textNode);
+    }
+
+    findTotalMatches = marks.length;
+    findMatchIndex = 0;
+
+    if (marks.length > 0) {
+      scrollToPreviewMatch(0);
+    }
+
+    previewSearchCleanup = () => {
+      for (const mark of marks) {
+        const parent = mark.parentNode;
+        if (parent) {
+          parent.replaceChild(document.createTextNode(mark.textContent || ''), mark);
+          parent.normalize();
+        }
+      }
+    };
+  }
+
+  function scrollToPreviewMatch(index: number) {
+    const marks = document.querySelectorAll('.preview-container .find-match');
+    marks.forEach((m) => m.classList.remove('find-match-active'));
+    const target = marks[index];
+    if (target) {
+      target.classList.add('find-match-active');
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  // Re-apply search when switching editor modes
+  $effect(() => {
+    const _mode = editorMode;
+    if (showFindBar && findQuery) {
+      if (_mode === 'preview') {
+        // Delay slightly to let Svelte render the preview DOM
+        setTimeout(() => applyPreviewSearch(findQuery), 50);
+      } else {
+        cleanupPreviewSearch();
+      }
+    }
+  });
 
   async function handleFixSkill() {
     if (!editingSkill) return;
@@ -788,13 +940,26 @@
         handleRefresh();
         return;
       }
+      // Ctrl+F / Cmd+F - Find in editor, or focus skill search
+      if ((event.key === 'f' || event.key === 'F') && !event.shiftKey) {
+        event.preventDefault();
+        if (editingSkill) {
+          showFindBar = true;
+        } else {
+          const skillSearch = document.querySelector<HTMLInputElement>('.search-input');
+          skillSearch?.focus();
+        }
+        return;
+      }
       // Let other Cmd/Ctrl combos pass through (copy, paste, undo, etc.)
       return;
     }
 
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (contextMenu) {
+      if (showFindBar) {
+        closeFindBar();
+      } else if (contextMenu) {
         hideContextMenu();
       } else if (showNewSkillForm) {
         handleCloseNewSkillForm();
@@ -970,7 +1135,7 @@
     </div>
 
     {#if skills.length > 0}
-      <div class="search-bar">
+      <div class="search-bar" class:active={!!searchQuery}>
         <Search class="search-icon" size={14} strokeWidth={1.5} />
         <input
           class="search-input"
@@ -1119,8 +1284,24 @@
         </div>
       {/if}
       <div class="editor-container">
+        {#if showFindBar}
+          <SearchBar
+            totalMatches={findTotalMatches}
+            currentMatch={findMatchIndex}
+            onsearch={handleFindSearch}
+            onnext={handleFindNext}
+            onprev={handleFindPrev}
+            onclose={closeFindBar}
+          />
+        {/if}
         {#if editorMode === 'edit'}
-          <SkillEditor content={editorContent} onchange={handleEditorChange} />
+          <SkillEditor
+            content={editorContent}
+            onchange={handleEditorChange}
+            searchTerm={showFindBar ? findQuery : ''}
+            currentMatchIndex={findMatchIndex}
+            onmatchcount={handleFindMatchCount}
+          />
         {:else}
           <OverlayScrollbarsComponent class="preview-scroll-container" options={{ scrollbars: { autoHide: 'scroll', autoHideDelay: 1000 } }} defer>
             <div class="preview-container">
@@ -1370,10 +1551,10 @@
     --color-text-muted: rgba(0, 0, 0, 0.55);
     --color-text-dim: rgba(0, 0, 0, 0.35);
 
-    --color-primary: #EAAA00;
-    --color-primary-hover: #D49800;
-    --color-primary-muted: rgba(234, 170, 0, 0.15);
-    --color-primary-text: #1a1a1a;
+    --color-primary: #A67C00;
+    --color-primary-hover: #8F6B00;
+    --color-primary-muted: rgba(166, 124, 0, 0.12);
+    --color-primary-text: #ffffff;
 
     --color-success: #34c759;
     --color-warning: #ff9500;
@@ -1795,13 +1976,21 @@
     padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
-    transition: border-color var(--theme-transition);
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+  }
+
+  .search-bar.active {
+    border-bottom-color: var(--color-primary);
   }
 
   :global(.search-icon) {
     flex-shrink: 0;
     color: var(--color-text-dim);
-    transition: color var(--theme-transition);
+    transition: color 0.2s ease;
+  }
+
+  .search-bar.active :global(.search-icon) {
+    color: var(--color-primary);
   }
 
   .search-input {
@@ -2350,6 +2539,7 @@
     flex: 1;
     overflow: hidden;
     animation: editor-fade-in 0.2s ease-out;
+    position: relative;
   }
 
   /* Preview Container */
@@ -2521,6 +2711,25 @@
   .preview-container :global(img) {
     max-width: 100%;
     border-radius: var(--radius-md);
+  }
+
+  /* Preview: Find-in-editor highlights */
+  .preview-container :global(.find-match) {
+    background-color: rgba(255, 215, 0, 0.3);
+    border-radius: 2px;
+    padding: 1px 0;
+  }
+
+  .preview-container :global(.find-match-active) {
+    background-color: rgba(255, 215, 0, 0.7);
+  }
+
+  :root[data-theme="light"] .preview-container :global(.find-match) {
+    background-color: rgba(166, 124, 0, 0.2);
+  }
+
+  :root[data-theme="light"] .preview-container :global(.find-match-active) {
+    background-color: rgba(166, 124, 0, 0.45);
   }
 
   .editor-toolbar {

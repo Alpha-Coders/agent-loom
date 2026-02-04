@@ -1,19 +1,53 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, highlightActiveLine } from '@codemirror/view';
-  import { EditorState, Compartment } from '@codemirror/state';
+  import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, highlightActiveLine, Decoration } from '@codemirror/view';
+  import { EditorState, Compartment, StateField, StateEffect } from '@codemirror/state';
   import { markdown } from '@codemirror/lang-markdown';
   import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
   import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, indentOnInput, HighlightStyle } from '@codemirror/language';
   import { oneDark } from '@codemirror/theme-one-dark';
   import { tags } from '@lezer/highlight';
+  import { SearchCursor } from '@codemirror/search';
 
   interface Props {
     content: string;
     onchange?: (content: string) => void;
+    searchTerm?: string;
+    currentMatchIndex?: number;
+    onmatchcount?: (count: number) => void;
   }
 
-  let { content, onchange }: Props = $props();
+  let { content, onchange, searchTerm = '', currentMatchIndex = 0, onmatchcount }: Props = $props();
+
+  // Search decoration effects and field
+  const setSearchMatches = StateEffect.define<{ matches: { from: number; to: number }[]; activeIndex: number }>();
+  const clearSearchMatches = StateEffect.define<null>();
+
+  const matchMark = Decoration.mark({ class: 'cm-search-match' });
+  const activeMatchMark = Decoration.mark({ class: 'cm-search-match-active' });
+
+  const searchField = StateField.define({
+    create() {
+      return Decoration.none;
+    },
+    update(decorations, tr) {
+      for (const effect of tr.effects) {
+        if (effect.is(setSearchMatches)) {
+          const { matches, activeIndex } = effect.value;
+          if (matches.length === 0) return Decoration.none;
+          const decos = matches.map((m, i) =>
+            (i === activeIndex ? activeMatchMark : matchMark).range(m.from, m.to)
+          );
+          return Decoration.set(decos, true);
+        }
+        if (effect.is(clearSearchMatches)) {
+          return Decoration.none;
+        }
+      }
+      return decorations;
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  });
 
   let editorContainer: HTMLDivElement;
   let view: EditorView | null = null;
@@ -147,6 +181,7 @@
         themeCompartment.of(getThemeExtensions(isDark)),
         EditorView.lineWrapping,
         updateListener,
+        searchField,
       ],
     });
 
@@ -235,6 +270,45 @@
       });
     }
   });
+
+  // Search: rebuild decorations when searchTerm or currentMatchIndex changes
+  $effect(() => {
+    if (!view) return;
+    const term = searchTerm;
+    const activeIdx = currentMatchIndex;
+
+    if (!term) {
+      view.dispatch({ effects: clearSearchMatches.of(null) });
+      onmatchcount?.(0);
+      return;
+    }
+
+    const matches: { from: number; to: number }[] = [];
+    const cursor = new SearchCursor(view.state.doc, term, 0, view.state.doc.length, (a) => a.toLowerCase());
+    while (!cursor.next().done) {
+      matches.push({ from: cursor.value.from, to: cursor.value.to });
+    }
+
+    onmatchcount?.(matches.length);
+
+    if (matches.length === 0) {
+      view.dispatch({ effects: clearSearchMatches.of(null) });
+      return;
+    }
+
+    const clampedIdx = Math.max(0, Math.min(activeIdx, matches.length - 1));
+    view.dispatch({
+      effects: setSearchMatches.of({ matches, activeIndex: clampedIdx }),
+    });
+
+    // Scroll the active match into view
+    const activeMatch = matches[clampedIdx];
+    if (activeMatch) {
+      view.dispatch({
+        effects: EditorView.scrollIntoView(activeMatch.from, { y: 'center' }),
+      });
+    }
+  });
 </script>
 
 <div class="editor-wrapper" bind:this={editorContainer}></div>
@@ -253,6 +327,25 @@
 
   .editor-wrapper :global(.cm-focused) {
     outline: none;
+  }
+
+  /* Search match highlighting */
+  .editor-wrapper :global(.cm-search-match) {
+    background-color: rgba(255, 215, 0, 0.3);
+    border-radius: 2px;
+  }
+
+  .editor-wrapper :global(.cm-search-match-active) {
+    background-color: rgba(255, 215, 0, 0.7);
+    border-radius: 2px;
+  }
+
+  :global([data-theme="light"]) .editor-wrapper :global(.cm-search-match) {
+    background-color: rgba(166, 124, 0, 0.2);
+  }
+
+  :global([data-theme="light"]) .editor-wrapper :global(.cm-search-match-active) {
+    background-color: rgba(166, 124, 0, 0.45);
   }
 
   /* Native scrollbar auto-hide for CodeMirror */
